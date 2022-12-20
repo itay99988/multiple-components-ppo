@@ -8,14 +8,18 @@ RANDOM = "(Random)"
 # A transition class (transition of a process). contains name, source state, target state, and a status (success,
 # failure or random)
 class Transition:
-    def __init__(self, name, source_state, target_state, status=None):
+    def __init__(self, name, source_state, target_state, is_global=True, status=None):
         self.name = name
         self.source_state = source_state
         self.target_state = target_state
+        self.is_global = is_global
         self.status = status
 
     def copy(self, status):
-        return Transition(self.name, self.source_state, self.target_state, status)
+        return Transition(self.name, self.source_state, self.target_state, self.is_global, status)
+
+    def is_global(self):
+        return self.is_global
 
     # a string representation of a transition - to be used in the execution report
     def __str__(self):
@@ -47,8 +51,8 @@ class Process:
             self.current_state = name
 
     # adds a new transition to the process
-    def add_transition(self, name, source, target):
-        self.transitions.append(Transition(name, source, target))
+    def add_transition(self, name, source, target, is_global=True):
+        self.transitions.append(Transition(name, source, target, is_global=is_global))
 
     # returns to the initial state of the transition
     def reset(self):
