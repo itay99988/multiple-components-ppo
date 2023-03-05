@@ -94,9 +94,9 @@ class DualInterface(DistSystem):
             self.if2_execution.append(self.if2.copy_transition_w_status(if2_tr, status=SUCCESS))
 
             # trigger the transition for both interfaces
+            reward = max(self.if1.get_transition_reward(if1_tr), self.if2.get_transition_reward(if2_tr))
             self.if1.trigger_transition(if1_tr)
             self.if2.trigger_transition(if2_tr)
-            reward = 1
         else:
             full_if1_tr = self.if1.copy_transition_w_status(if1_tr, status=FAIL)
             full_if2_tr = self.if2.copy_transition_w_status(if2_tr, status=FAIL)
@@ -108,9 +108,10 @@ class DualInterface(DistSystem):
             if2_rnd_tr = self.if2.get_random_transition()
 
             # trigger the randomly chosen transitions for both interfaces
+            reward = -1 * max(self.if1.get_transition_reward(if1_tr), self.if2.get_transition_reward(if2_tr))
             self.if1.trigger_transition(if1_rnd_tr)
             self.if2.trigger_transition(if2_rnd_tr)
-            reward = -1
+
 
         if1_partial_state = self.if1.get_rnn_input(full_if1_tr)
         if2_partial_state = self.if2.get_rnn_input(full_if2_tr)
@@ -123,3 +124,49 @@ class DualInterface(DistSystem):
         if2_next_state = self.get_compound_state(1)
 
         return if1_next_state, if2_next_state, reward
+
+    def local_step(self, if_tr_idx, if_idx):
+        if if_idx == 0:
+            if_tr = self.if1.transitions[if_tr_idx].name
+            full_if_tr = self.if1.copy_transition_w_status(if_tr, status=SUCCESS)
+            self.if1_execution.append(self.if1.copy_transition_w_status(if_tr, status=SUCCESS))
+
+            # trigger the transition for the interface
+            reward = self.if1.get_transition_reward(if_tr)
+            self.if1.trigger_transition(if_tr)
+
+            if_partial_state = self.if1.get_rnn_input(full_if_tr)
+
+            # building compound states for both interfaces
+            self.if1_state_history.append(if_partial_state)
+            if_next_state = self.get_compound_state(0)
+
+        elif if_idx == 1:
+            if_tr = self.if2.transitions[if_tr_idx].name
+            full_if_tr = self.if2.copy_transition_w_status(if_tr, status=SUCCESS)
+            self.if2_execution.append(self.if2.copy_transition_w_status(if_tr, status=SUCCESS))
+
+            # trigger the transition for the interface
+            reward = self.if2.get_transition_reward(if_tr)
+            self.if2.trigger_transition(if_tr)
+
+            if_partial_state = self.if2.get_rnn_input(full_if_tr)
+
+            # building compound states for both interfaces
+            self.if2_state_history.append(if_partial_state)
+            if_next_state = self.get_compound_state(1)
+
+        else:
+            raise Exception("No such interface")
+
+        return if_next_state, reward
+
+    def get_exploration_status(self, if_idx):
+        return self.get_if(if_idx).get_exploration_status()
+
+    def set_exploration_status(self, if_idx, status):
+        self.get_if(if_idx).set_exploration_status(status)
+
+    def invert_exploration_status(self, if_idx):
+        status = self.get_exploration_status(if_idx)
+        self.set_exploration_status(if_idx, not status)

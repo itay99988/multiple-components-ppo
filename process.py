@@ -8,18 +8,22 @@ RANDOM = "(Random)"
 # A transition class (transition of a process). contains name, source state, target state, and a status (success,
 # failure or random)
 class Transition:
-    def __init__(self, name, source_state, target_state, is_global=True, status=None):
+    def __init__(self, name, source_state, target_state, reward=0, global_action=True, status=None):
         self.name = name
         self.source_state = source_state
         self.target_state = target_state
-        self.is_global = is_global
+        self.reward = reward
+        self.global_action = global_action
         self.status = status
 
     def copy(self, status):
-        return Transition(self.name, self.source_state, self.target_state, self.is_global, status)
+        return Transition(self.name, self.source_state, self.target_state, self.reward, self.global_action, status)
 
     def is_global(self):
-        return self.is_global
+        return self.global_action
+
+    def get_reward(self):
+        return self.reward
 
     # a string representation of a transition - to be used in the execution report
     def __str__(self):
@@ -34,6 +38,7 @@ class Process:
         self.initial_state = initial_state
         self.current_state = initial_state
         self.transitions = transitions  # transitions that are specific to the process.
+        self.exploration = True
 
     def add_state(self, name):
         self.states.append(name)
@@ -50,9 +55,15 @@ class Process:
         if name in self.states:
             self.current_state = name
 
+    def set_exploration_status(self, status):
+        self.exploration = status
+
+    def get_exploration_status(self):
+        return self.exploration
+
     # adds a new transition to the process
-    def add_transition(self, name, source, target, is_global=True):
-        self.transitions.append(Transition(name, source, target, is_global=is_global))
+    def add_transition(self, name, source, target, reward=0, global_action=True):
+        self.transitions.append(Transition(name, source, target, reward=reward, global_action=global_action))
 
     # returns to the initial state of the transition
     def reset(self):
@@ -72,6 +83,12 @@ class Process:
             source_state = self.current_state
         possible_idx = (i for i, tr in enumerate(self.transitions) if tr.name == tr_name and tr.source_state == source_state)
         return next(possible_idx)
+
+    def get_transition_by_idx(self, tr_idx):
+        return self.transitions[tr_idx]
+
+    def get_transition_reward(self, tr_name):
+        return self.get_transition(tr_name).get_reward()
 
     # copies an entire transition object, with a new status
     def copy_transition_w_status(self, tr_name, source_state=None, status=None):

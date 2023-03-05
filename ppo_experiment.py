@@ -30,6 +30,16 @@ def experiment_selector(experiment, history_len):
 		return cycle_scc_experiment_setup(history_len)
 	elif experiment == 'hidden_cycle':
 		return hidden_cycle_experiment_setup(history_len)
+	elif experiment == 'permitted_local':
+		return permitted_local_experiment_setup(history_len)
+	elif experiment == 'prisoners_dilemma':
+		return prisoners_dilemma_experiment_setup(history_len)
+	elif experiment == 'abcd_coordination':
+		return abcd_coordination_experiment_setup(history_len)
+	elif experiment == 'social_dilemma':
+		return social_dilemma_experiment_setup(history_len)
+	elif experiment == 'hold_back':
+		return hold_back_experiment_setup(history_len)
 	else:
 		return None
 
@@ -96,8 +106,8 @@ def test(dist_sys, actor_models, history_len):
 	if2_policy = SingleHeadRNN(input_dim2, tr_dim2)
 
 	# Load in the actor models saved by the PPO algorithm
-	if1_policy.load_state_dict(torch.load("{}1".format(actor_models)))
-	if2_policy.load_state_dict(torch.load("{}2".format(actor_models)))
+	if1_policy.load_state_dict(torch.load("{}1.pth".format(actor_models)))
+	if2_policy.load_state_dict(torch.load("{}2.pth".format(actor_models)))
 
 	# Evaluate our policy with a separate module, eval_policy, to demonstrate
 	# that once we are done training the model/policy with ppo.py, we no longer need
