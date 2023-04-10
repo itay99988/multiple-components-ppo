@@ -8,16 +8,18 @@ RANDOM = "(Random)"
 # A transition class (transition of a process). contains name, source state, target state, and a status (success,
 # failure or random)
 class Transition:
-    def __init__(self, name, source_state, target_state, reward=0, global_action=True, status=None):
+    def __init__(self, name, source_state, target_state, target_if_idx, reward=0, global_action=True, status=None):
         self.name = name
         self.source_state = source_state
         self.target_state = target_state
+        self.target_if_idx = target_if_idx
         self.reward = reward
         self.global_action = global_action
         self.status = status
 
     def copy(self, status):
-        return Transition(self.name, self.source_state, self.target_state, self.reward, self.global_action, status)
+        return Transition(self.name, self.source_state, self.target_state, self.target_if_idx,
+                          self.reward, self.global_action, status)
 
     def is_global(self):
         return self.global_action
@@ -25,9 +27,13 @@ class Transition:
     def get_reward(self):
         return self.reward
 
+    def get_target_if(self):
+        return self.target_if_idx
+
     # a string representation of a transition - to be used in the execution report
     def __str__(self):
-        return "{0} ---------{1}{2}---------> {3}".format(self.source_state, self.name, self.status, self.target_state)
+        return "To interface {4}:{0} ---------{1}{2}---------> {3}".format(self.source_state, self.name, self.status,
+                                                                           self.target_state, self.target_if_idx)
 
 
 # A process class - can be either the system or the environment (a finite and deterministic automaton)
@@ -62,8 +68,8 @@ class Process:
         return self.exploration
 
     # adds a new transition to the process
-    def add_transition(self, name, source, target, reward=0, global_action=True):
-        self.transitions.append(Transition(name, source, target, reward=reward, global_action=global_action))
+    def add_transition(self, name, source, target, target_if, reward=0, global_action=True):
+        self.transitions.append(Transition(name, source, target, target_if, reward=reward, global_action=global_action))
 
     # returns to the initial state of the transition
     def reset(self):
@@ -71,17 +77,26 @@ class Process:
 
     # returns the correct transition object according to its name and its source state
     # (the source state is enough in order to distinguish two transitions with the same name)
-    def get_transition(self, tr_name, source_state=None):
+    def get_transition(self, tr_name, tr_target_if=None, source_state=None):
         if source_state is None:
             source_state = self.current_state
-        possible_tr = (tr for tr in self.transitions if tr.name == tr_name and tr.source_state == source_state)
+        if tr_target_if is None:
+            possible_tr = (tr for tr in self.transitions if tr.name == tr_name and tr.source_state == source_state)
+        else:
+            possible_tr = (tr for tr in self.transitions if tr.name == tr_name and tr.target_if_idx == tr_target_if and
+                           tr.source_state == source_state)
         return next(possible_tr)
 
     # returns the index of a specific transition from the transition list. important for the loss function calculation.
-    def get_transition_idx(self, tr_name, source_state=None):
+    def get_transition_idx(self, tr_name, tr_target_if=None, source_state=None):
         if source_state is None:
             source_state = self.current_state
-        possible_idx = (i for i, tr in enumerate(self.transitions) if tr.name == tr_name and tr.source_state == source_state)
+        if tr_target_if is None:
+            possible_idx = (i for i, tr in enumerate(self.transitions) if tr.name == tr_name and
+                            tr.source_state == source_state)
+        else:
+            possible_idx = (i for i, tr in enumerate(self.transitions) if tr.name == tr_name and
+                            tr.target_if_idx == tr_target_if and tr.source_state == source_state)
         return next(possible_idx)
 
     def get_transition_by_idx(self, tr_idx):
@@ -91,10 +106,10 @@ class Process:
         return self.get_transition(tr_name).get_reward()
 
     # copies an entire transition object, with a new status
-    def copy_transition_w_status(self, tr_name, source_state=None, status=None):
+    def copy_transition_w_status(self, tr_name, target_if, source_state=None, status=None):
         if source_state is None:
             source_state = self.current_state
-        orig_tr = self.get_transition(tr_name, source_state)
+        orig_tr = self.get_transition(tr_name, target_if, source_state)
         return orig_tr.copy(status)
 
     # returns a set of names of transitions that can be triggered in the current state.
@@ -103,6 +118,14 @@ class Process:
         for tr in self.transitions:
             if tr.source_state == self.current_state:
                 available.append(tr.name)
+        return available
+
+    # returns a set of names of transitions that can be triggered in the current state, with their target interface idx.
+    def available_transitions_with_if(self):
+        available = []
+        for tr in self.transitions:
+            if tr.source_state == self.current_state:
+                available.append((tr.name, tr.target_if_idx))
         return available
 
     # switches the process' state according to the transition tr_name.
@@ -132,7 +155,8 @@ class Process:
 
         if tr is not None:
             state_idx = self.states.index(self.current_state)
-            transition_idx = self.get_transition_idx(tr.name, tr.source_state)
+            transition_idx = self.get_transition_idx(tr.name, tr_target_if=tr.target_if_idx,
+                                                     source_state=tr.source_state)
 
             # "-1" in case of failure and "1" otherwise
             if tr.status == FAIL:
@@ -141,34 +165,3 @@ class Process:
                 vec[len(self.states) * transition_idx + state_idx] = 1
 
         return vec
-
-    # returns the name of the predicted transition according to the network output
-    # there are two different methods to infer the next transition according the network output:
-    # 1. randomly choose a transition according the softmax distribution of the network
-    # 2. always choose the most probable transition (argmax)
-    def get_predicted_transition(self, rnn_output, method="by_tr_distribution", debug_prob=False, debug_file="sys1_probs"):
-        available_transitions = self.available_transitions()
-        # leave only the possible transitions
-        distribution = [rnn_output[:, i] for i, tr in enumerate(self.transitions)
-                        if tr.name in available_transitions
-                        and tr.source_state == self.current_state]
-
-        if debug_prob:
-            with open(debug_file, 'a') as f:
-                print(distribution, file=f)
-
-        # randomly choose a transition according the softmax distribution of the network
-        if method == "by_tr_distribution":
-            predicted_transition = random.choices(available_transitions, distribution)[0]
-
-        # always choose the most probable transition at the time
-        elif method == "argmax":
-            i2v = lambda i: distribution[i]
-            idx_max = max(range(len(distribution)), key=i2v)
-            predicted_transition = available_transitions[idx_max]
-
-        else:
-            raise NameError("Incorrect method")
-
-        # return the chosen transition
-        return predicted_transition

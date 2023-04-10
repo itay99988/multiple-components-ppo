@@ -16,30 +16,36 @@ def experiment_selector(experiment, history_len):
 		Return:
 			A distributed system object containing both system and environment.
 	"""
-	if experiment == 'permitted':
-		return permitted_experiment_setup(history_len)
-	elif experiment == 'schedule':
-		return schedule_experiment_setup(history_len)
-	elif experiment == 'cases':
-		return cases_experiment_setup(history_len)
-	elif experiment == 'choice_scc':
-		return choice_scc_experiment_setup(history_len)
-	elif experiment == 'schedule_cycle':
-		return schedule_cycle_experiment_setup(history_len)
-	elif experiment == 'cycle_scc':
-		return cycle_scc_experiment_setup(history_len)
-	elif experiment == 'hidden_cycle':
-		return hidden_cycle_experiment_setup(history_len)
-	elif experiment == 'permitted_local':
-		return permitted_local_experiment_setup(history_len)
-	elif experiment == 'prisoners_dilemma':
-		return prisoners_dilemma_experiment_setup(history_len)
-	elif experiment == 'abcd_coordination':
-		return abcd_coordination_experiment_setup(history_len)
-	elif experiment == 'social_dilemma':
-		return social_dilemma_experiment_setup(history_len)
-	elif experiment == 'hold_back':
-		return hold_back_experiment_setup(history_len)
+	# if experiment == 'permitted':
+	# 	return permitted_experiment_setup(history_len)
+	# elif experiment == 'schedule':
+	# 	return schedule_experiment_setup(history_len)
+	# elif experiment == 'cases':
+	# 	return cases_experiment_setup(history_len)
+	# elif experiment == 'choice_scc':
+	# 	return choice_scc_experiment_setup(history_len)
+	# elif experiment == 'schedule_cycle':
+	# 	return schedule_cycle_experiment_setup(history_len)
+	# elif experiment == 'cycle_scc':
+	# 	return cycle_scc_experiment_setup(history_len)
+	# elif experiment == 'hidden_cycle':
+	# 	return hidden_cycle_experiment_setup(history_len)
+	# elif experiment == 'permitted_local':
+	# 	return permitted_local_experiment_setup(history_len)
+	# elif experiment == 'prisoners_dilemma':
+	# 	return prisoners_dilemma_experiment_setup(history_len)
+	# elif experiment == 'abcd_coordination':
+	# 	return abcd_coordination_experiment_setup(history_len)
+	# elif experiment == 'social_dilemma':
+	# 	return social_dilemma_experiment_setup(history_len)
+	# elif experiment == 'hold_back':
+	# 	return hold_back_experiment_setup(history_len)
+	if experiment == 'triple_coordination':
+		return triple_coordination_experiment_setup(history_len)
+	elif experiment == 'triple_symmetry':
+		return triple_symmetry_experiment_setup(history_len)
+	elif experiment == 'client_server':
+		return client_server_experiment_setup(history_len)
 	else:
 		return None
 
@@ -58,19 +64,20 @@ def train(dist_sys, hyperparameters, actor_models, critic_models):
 	print(f"Training", flush=True)
 
 	# Create a model for PPO.
-	model = PPO(policy_class=SingleHeadRNN, dual_if=dist_sys, **hyperparameters)
+	model = PPO(policy_class=SingleHeadRNN, triple_if=dist_sys, **hyperparameters)
 
 	# Tries to load in an existing actor/critic model to continue training on
 	if actor_models != '' and critic_models != '':
 		print(f"Loading in {actor_models} and {critic_models}...", flush=True)
-		model.if1_actor.load_state_dict(torch.load("{}1".format(actor_models)))
-		model.if2_actor.load_state_dict(torch.load("{}2".format(actor_models)))
-		model.if1_critic.load_state_dict(torch.load("{}1".format(critic_models)))
-		model.if2_critic.load_state_dict(torch.load("{}2".format(critic_models)))
-		print(f"Successfully loaded.", flush=True)
+		for i in range(3):
+			model.actor[i].load_state_dict(torch.load("{}{}".format(actor_models, i)))
+			model.critic[i].load_state_dict(torch.load("{}{}".format(critic_models, i)))
+			print(f"Successfully loaded.", flush=True)
+
 	elif actor_models != '' or critic_models != '': # Don't train from scratch if user accidentally forgets actor/critic model
 		print(f"Error: Either specify both actor/critic models or none at all. We don't want to accidentally override anything!")
 		sys.exit(0)
+
 	else:
 		print(f"Training from scratch.", flush=True)
 
@@ -96,24 +103,28 @@ def test(dist_sys, actor_models, history_len):
 		sys.exit(0)
 
 	# Extract out dimensions of observation and action spaces
-	tr_dim1 = len(dist_sys.if1.transitions)
-	input_dim1 = len(dist_sys.if1.states) * tr_dim1 * history_len
-	tr_dim2 = len(dist_sys.if2.transitions)
-	input_dim2 = len(dist_sys.if2.states) * tr_dim2 * history_len
+	tr_dim1 = len(dist_sys.ifs[0].transitions)
+	input_dim1 = len(dist_sys.ifs[0].states) * tr_dim1 * history_len
+	tr_dim2 = len(dist_sys.ifs[1].transitions)
+	input_dim2 = len(dist_sys.ifs[1].states) * tr_dim2 * history_len
+	tr_dim3 = len(dist_sys.ifs[2].transitions)
+	input_dim3 = len(dist_sys.ifs[2].states) * tr_dim3 * history_len
 
 	# Build our policy for both interfaces the same way we build our actor model in PPO
 	if1_policy = SingleHeadRNN(input_dim1, tr_dim1)
 	if2_policy = SingleHeadRNN(input_dim2, tr_dim2)
+	if3_policy = SingleHeadRNN(input_dim3, tr_dim3)
 
 	# Load in the actor models saved by the PPO algorithm
 	if1_policy.load_state_dict(torch.load("{}1.pth".format(actor_models)))
 	if2_policy.load_state_dict(torch.load("{}2.pth".format(actor_models)))
+	if3_policy.load_state_dict(torch.load("{}3.pth".format(actor_models)))
 
 	# Evaluate our policy with a separate module, eval_policy, to demonstrate
 	# that once we are done training the model/policy with ppo.py, we no longer need
 	# ppo.py since it only contains the training algorithm. The model/policy itself exists
 	# independently as a binary file that can be loaded in with torch.
-	eval_policy(policy1=if1_policy, policy2=if2_policy, dual_if=dist_sys)
+	eval_policy(policy1=if1_policy, policy2=if2_policy, policy3=if3_policy, triple_if=dist_sys)
 
 
 def main(args):

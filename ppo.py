@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import time
 import torch
 import torch.nn as nn
@@ -11,7 +12,7 @@ class PPO:
 		This is the PPO class we will use as our model in main.py
 	"""
 
-    def __init__(self, policy_class, dual_if, **hyperparameters):
+    def __init__(self, policy_class, triple_if, **hyperparameters):
         """
 			Initializes the PPO model, including hyperparameters.
 			Parameters:
@@ -28,24 +29,30 @@ class PPO:
         self._init_hyperparameters(hyperparameters)
 
         # Extract dual interface environment information
-        self.dual_if = dual_if
-        self.tr_dim.append(len(dual_if.if1.transitions))
-        self.tr_dim.append(len(dual_if.if2.transitions))
-        self.input_dim.append(len(dual_if.if1.states) * self.tr_dim[0] * self.history_len)
-        self.input_dim.append(len(dual_if.if2.states) * self.tr_dim[1] * self.history_len)
+        self.triple_if = triple_if
+        self.tr_dim.append(len(triple_if.get_if(0).transitions))
+        self.tr_dim.append(len(triple_if.get_if(1).transitions))
+        self.tr_dim.append(len(triple_if.get_if(2).transitions))
+        self.input_dim.append(len(triple_if.get_if(0).states) * self.tr_dim[0] * self.history_len)
+        self.input_dim.append(len(triple_if.get_if(1).states) * self.tr_dim[1] * self.history_len)
+        self.input_dim.append(len(triple_if.get_if(2).states) * self.tr_dim[2] * self.history_len)
         self.end_condition = self.end_cond_threshold * self.max_timesteps_per_episode
 
-        # Initialize actor and critic networks for both interfaces
+        # Initialize actor and critic networks for all interfaces
         self.actor.append(policy_class(self.input_dim[0], self.tr_dim[0]))  # ALG STEP 1
         self.critic.append(policy_class(self.input_dim[0], 1))
         self.actor.append(policy_class(self.input_dim[1], self.tr_dim[1]))
         self.critic.append(policy_class(self.input_dim[1], 1))
+        self.actor.append(policy_class(self.input_dim[2], self.tr_dim[2]))
+        self.critic.append(policy_class(self.input_dim[2], 1))
 
         # Initialize optimizers for actor and critic
         self.actor_optim.append(Adam(self.actor[0].parameters(), lr=self.lr))
         self.critic_optim.append(Adam(self.critic[0].parameters(), lr=self.lr))
         self.actor_optim.append(Adam(self.actor[1].parameters(), lr=self.lr))
         self.critic_optim.append(Adam(self.critic[1].parameters(), lr=self.lr))
+        self.actor_optim.append(Adam(self.actor[2].parameters(), lr=self.lr))
+        self.critic_optim.append(Adam(self.critic[2].parameters(), lr=self.lr))
 
         # This logger will help us with printing out summaries of each iteration
         self.logger = {
@@ -53,7 +60,12 @@ class PPO:
             't_so_far': 0,  # timesteps so far
             'i_so_far': 0,  # iterations so far
             'batch_lens': [],  # episodic lengths in batch
-            'batch_rews': [],  # episodic returns in batch
+            'batch_rews1': [],  # episodic returns in batch
+            'batch_rews2': [],  # episodic returns in batch
+            'batch_rews3': [],  # episodic returns in batch
+            'avg_ep_returns1': [],  # Average episodic returns for each batch
+            'avg_ep_returns2': [],  # Average episodic returns for each batch
+            'avg_ep_returns3': [],  # Average episodic returns for each batch
             'actor_losses': [],  # losses of actor network in current iteration
         }
 
@@ -70,8 +82,9 @@ class PPO:
         t_so_far = 0  # Timesteps simulated so far
         i_so_far = 0  # Iterations ran so far
         avg_ep_return_lst = []   # last average episodic returns
-        self.dual_if.set_exploration_status(0, True)
-        self.dual_if.set_exploration_status(1, True)
+        self.triple_if.set_exploration_status(0, True)
+        self.triple_if.set_exploration_status(1, True)
+        self.triple_if.set_exploration_status(2, True)
 
         while t_so_far < total_timesteps:  # ALG STEP 2
             self.initial_temperature /= self.temperature_decay
@@ -93,14 +106,17 @@ class PPO:
             batch_size = int(self.timesteps_per_batch / self.max_timesteps_per_episode)
             batch_obs[0] = batch_obs[0].view(batch_size, self.max_timesteps_per_episode, -1)
             batch_obs[1] = batch_obs[1].view(batch_size, self.max_timesteps_per_episode, -1)
+            batch_obs[2] = batch_obs[2].view(batch_size, self.max_timesteps_per_episode, -1)
 
             # Calculate advantage at k-th iteration
-            V = [None, None]
-            A_k = [None, None]
+            V = [None, None, None]
+            A_k = [None, None, None]
             V[0], _ = self.evaluate(batch_obs[0], batch_acts[0], 0)
             V[1], _ = self.evaluate(batch_obs[1], batch_acts[1], 1)
+            V[2], _ = self.evaluate(batch_obs[2], batch_acts[2], 2)
             A_k[0] = batch_rtgs[0] - V[0].detach()  # ALG STEP 5
             A_k[1] = batch_rtgs[1] - V[1].detach()
+            A_k[2] = batch_rtgs[2] - V[2].detach()
 
             # One of the only tricks I use that isn't in the pseudocode. Normalizing advantages
             # isn't theoretically necessary, but in practice it decreases the variance of
@@ -108,13 +124,15 @@ class PPO:
             # solving some environments was too unstable without it.
             A_k[0] = (A_k[0] - A_k[0].mean()) / (A_k[0].std() + 1e-10)
             A_k[1] = (A_k[1] - A_k[1].mean()) / (A_k[1].std() + 1e-10)
+            A_k[2] = (A_k[2] - A_k[2].mean()) / (A_k[2].std() + 1e-10)
 
             # This is the loop where we update our network for some n epochs
             for _ in range(self.n_updates_per_iteration):  # ALG STEP 6 & 7
-                curr_log_probs = [None, None]
+                curr_log_probs = [None, None, None]
                 # Calculate V_phi and pi_theta(a_t | s_t)
                 V[0], curr_log_probs[0] = self.evaluate(batch_obs[0], batch_acts[0], 0)
                 V[1], curr_log_probs[1] = self.evaluate(batch_obs[1], batch_acts[1], 1)
+                V[2], curr_log_probs[2] = self.evaluate(batch_obs[2], batch_acts[2], 2)
 
                 # Calculate the ratio pi_theta(a_t | s_t) / pi_theta_k(a_t | s_t)
                 # NOTE: we just subtract the logs, which is the same as
@@ -123,26 +141,31 @@ class PPO:
                 # here's a great explanation:
                 # https://cs.stackexchange.com/questions/70518/why-do-we-use-the-log-in-gradient-based-reinforcement-algorithms
                 # TL;DR makes gradient ascent easier behind the scenes.
-                ratios = [None, None]
+                ratios = [None, None, None]
                 ratios[0] = torch.exp(curr_log_probs[0] - batch_log_probs[0])
                 ratios[1] = torch.exp(curr_log_probs[1] - batch_log_probs[1])
+                ratios[2] = torch.exp(curr_log_probs[2] - batch_log_probs[2])
 
                 # Calculate surrogate losses.
-                surr1, surr2 = [None, None], [None, None]
+                surr1, surr2 = [None, None, None], [None, None, None]
                 surr1[0] = ratios[0] * A_k[0]
                 surr1[1] = ratios[1] * A_k[1]
+                surr1[2] = ratios[2] * A_k[2]
                 surr2[0] = torch.clamp(ratios[0], 1 - self.clip, 1 + self.clip) * A_k[0]
                 surr2[1] = torch.clamp(ratios[1], 1 - self.clip, 1 + self.clip) * A_k[1]
+                surr2[2] = torch.clamp(ratios[2], 1 - self.clip, 1 + self.clip) * A_k[2]
 
                 # Calculate actor and critic losses.
                 # NOTE: we take the negative min of the surrogate losses because we're trying to maximize
                 # the performance function, but Adam minimizes the loss. So minimizing the negative
                 # performance function maximizes it.
-                actor_loss, critic_loss = [None, None], [None, None]
+                actor_loss, critic_loss = [None, None, None], [None, None, None]
                 actor_loss[0] = (-torch.min(surr1[0], surr2[0])).mean()
                 actor_loss[1] = (-torch.min(surr1[1], surr2[1])).mean()
+                actor_loss[2] = (-torch.min(surr1[2], surr2[2])).mean()
                 critic_loss[0] = nn.MSELoss()(V[0], batch_rtgs[0])
                 critic_loss[1] = nn.MSELoss()(V[1], batch_rtgs[1])
+                critic_loss[2] = nn.MSELoss()(V[2], batch_rtgs[2])
 
                 # Calculate gradients and perform backward propagation for actor and critic network
                 self.actor_optim[0].zero_grad()
@@ -159,18 +182,32 @@ class PPO:
                 critic_loss[1].backward()
                 self.critic_optim[1].step()
 
+                self.actor_optim[2].zero_grad()
+                actor_loss[2].backward(retain_graph=True)
+                self.actor_optim[2].step()
+                self.critic_optim[2].zero_grad()
+                critic_loss[2].backward()
+                self.critic_optim[2].step()
+
                 # Log actor loss
                 self.logger['actor_losses'].append(actor_loss[0].detach())
 
             # end condition
-            last_ear = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews1']])
-            avg_ep_return_lst.append(last_ear)
-            avg_ep_return = np.mean(avg_ep_return_lst[-8:])
+            last_ear1 = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews1']])
+            last_ear2 = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews2']])
+            last_ear3 = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews3']])
+            self.logger['avg_ep_returns1'].append(last_ear1)
+            self.logger['avg_ep_returns2'].append(last_ear2)
+            self.logger['avg_ep_returns3'].append(last_ear3)
+
+            avg_ep_return = np.mean(self.logger['avg_ep_returns1'][-8:])
             if avg_ep_return >= self.end_condition:
                 torch.save(self.actor[0].state_dict(), './ppo_actor1.pth')
                 torch.save(self.actor[1].state_dict(), './ppo_actor2.pth')
+                torch.save(self.actor[2].state_dict(), './ppo_actor3.pth')
                 torch.save(self.critic[0].state_dict(), './ppo_critic1.pth')
                 torch.save(self.critic[1].state_dict(), './ppo_critic2.pth')
+                torch.save(self.critic[2].state_dict(), './ppo_critic3.pth')
                 break
 
             # Print a summary of our training so far
@@ -180,8 +217,10 @@ class PPO:
             if i_so_far % self.save_freq == 0:
                 torch.save(self.actor[0].state_dict(), './ppo_actor1.pth')
                 torch.save(self.actor[1].state_dict(), './ppo_actor2.pth')
+                torch.save(self.actor[2].state_dict(), './ppo_actor3.pth')
                 torch.save(self.critic[0].state_dict(), './ppo_critic1.pth')
                 torch.save(self.critic[1].state_dict(), './ppo_critic2.pth')
+                torch.save(self.critic[2].state_dict(), './ppo_critic3.pth')
 
     def rollout(self):
         """
@@ -199,24 +238,25 @@ class PPO:
 		"""
 
         # get exploration values for the interfaces
-        exp_status = [self.dual_if.get_exploration_status(0), self.dual_if.get_exploration_status(1)]
+        exp_status = [self.triple_if.get_exploration_status(0), self.triple_if.get_exploration_status(1),
+                      self.triple_if.get_exploration_status(2)]
 
         # states lists (for each interface)
-        state = [[], []]
-        next_state = [[], []]
-        actor_hidden_state = [[], []]
+        state = [[], [], []]
+        next_state = [[], [], []]
+        actor_hidden_state = [[], [], []]
 
         # Batch data. For more details, check function header.
-        batch_obs = [[], []]
-        batch_acts = [[], []]
-        batch_log_probs = [[], []]
-        batch_rews = [[], []]
-        batch_rtgs = [[], []]
-        batch_lens = [[], []]
+        batch_obs = [[], [], []]
+        batch_acts = [[], [], []]
+        batch_log_probs = [[], [], []]
+        batch_rews = [[], [], []]
+        batch_rtgs = [[], [], []]
+        batch_lens = [[], [], []]
 
         # Episodic data. Keeps track of rewards per episode, will get cleared
         # upon each new episode
-        ep_rews = [[], []]
+        ep_rews = [[], [], []]
 
         t = 0  # Keeps track of how many timesteps we've run so far this batch
 
@@ -224,262 +264,138 @@ class PPO:
         while t < self.timesteps_per_batch:
             ep_rews[0] = []  # rewards collected per episode
             ep_rews[1] = []
+            ep_rews[2] = []
 
-            # Reset the environment. sNote that obs is short for observation.
-            self.dual_if.reset()
-            state[0] = self.dual_if.get_compound_state(0)
-            state[1] = self.dual_if.get_compound_state(1)
-
-            actor_hidden_state[0] = self.actor[0].init_hidden()
-            actor_hidden_state[1] = self.actor[1].init_hidden()
-
-            triggered_tr1 = triggered_tr2 = True
-            actions_count1 = actions_count2 = 0
-
-            t += self.max_timesteps_per_episode
-            # Run an episode for a maximum of max_timesteps_per_episode timesteps
-            while max(actions_count1, actions_count2) < self.max_timesteps_per_episode:
-
-                # t += 1  # Increment timesteps ran this batch so far
-
-                # Calculate action and make a step, in both interfaces
-                if triggered_tr1:
-                    action1, log_prob1, actor_hidden_state[0], fil_logits1 = self.get_action(state[0],
-                                                                                             actor_hidden_state[0],
-                                                                                             if_idx=0,
-                                                                                             exploration=exp_status[0])
-                if triggered_tr2:
-                    action2, log_prob2, actor_hidden_state[1], fil_logits2 = self.get_action(state[1],
-                                                                                             actor_hidden_state[1],
-                                                                                             if_idx=1,
-                                                                                             exploration=exp_status[1])
-
-                # both actions are global, or at least one is local?
-                if self.dual_if.get_if(0).get_transition_by_idx(action1).is_global() and \
-                   self.dual_if.get_if(1).get_transition_by_idx(action2).is_global():
-                    next_state[0], next_state[1], reward1 = self.dual_if.step(action1, action2)
-                    reward2 = reward1
-                    triggered_tr1 = triggered_tr2 = True
-                    actions_count1 += 1
-                    actions_count2 += 1
-                else:
-                    if not self.dual_if.get_if(0).get_transition_by_idx(action1).is_global():
-                        next_state[0], reward1 = self.dual_if.local_step(action1, 0)
-                        triggered_tr1 = True
-                        actions_count1 += 1
-                    else:
-                        triggered_tr1 = False
-
-                    if not self.dual_if.get_if(1).get_transition_by_idx(action2).is_global():
-                        next_state[1], reward2 = self.dual_if.local_step(action2, 1)
-                        triggered_tr2 = True
-                        actions_count2 += 1
-                    else:
-                        triggered_tr2 = False
-
-                # Track recent observation, reward, action, and action log probability (if there was a progress)
-                if triggered_tr1:
-                    batch_obs[0].append(state[0])
-                    ep_rews[0].append(reward1)
-                    batch_acts[0].append(action1)
-                    batch_log_probs[0].append(log_prob1)
-
-                    state[0] = next_state[0]
-
-                if triggered_tr2:
-                    batch_obs[1].append(state[1])
-                    ep_rews[1].append(reward2)
-                    batch_acts[1].append(action2)
-                    batch_log_probs[1].append(log_prob2)
-
-                    state[1] = next_state[1]
-
-                # if t == 1:
-                #     print(F.softmax(fil_logits, dim=0))
-
-
-            # Track episodic lengths and rewards
-            batch_lens[0].append(self.max_timesteps_per_episode)
-            batch_lens[1].append(self.max_timesteps_per_episode)
-
-            # Fill the shorter episode with padding
-            pad_length = self.max_timesteps_per_episode - min(actions_count1, actions_count2)
-            if actions_count1 < actions_count2:
-                for _ in range(pad_length):
-                    batch_obs[0].append([0]*len(state[0]))
-                    ep_rews[0].append(0)
-                    batch_acts[0].append(0)
-                    batch_log_probs[0].append(torch.tensor(0, dtype=torch.float))
-            else:
-                for _ in range(pad_length):
-                    batch_obs[1].append([0]*len(state[1]))
-                    ep_rews[1].append(0)
-                    batch_acts[1].append(0)
-                    batch_log_probs[1].append(torch.tensor(0, dtype=torch.float))
-
-            # Do this anyway
-            batch_rews[0].append(ep_rews[0])
-            batch_rews[1].append(ep_rews[1])
-
-        # print actions
-        print(self.get_actions_seq(batch_acts[0][0:self.max_timesteps_per_episode], 0))
-        print(self.get_actions_seq(batch_acts[1][0:self.max_timesteps_per_episode], 1))
-
-        # Reshape data as tensors in the shape specified in function description, before returning
-        batch_obs[0] = torch.tensor(batch_obs[0], dtype=torch.float)
-        batch_obs[1] = torch.tensor(batch_obs[1], dtype=torch.float)
-        batch_acts[0] = torch.tensor(batch_acts[0], dtype=torch.float)
-        batch_acts[1] = torch.tensor(batch_acts[1], dtype=torch.float)
-        batch_log_probs[0] = torch.tensor(batch_log_probs[0], dtype=torch.float)
-        batch_log_probs[1] = torch.tensor(batch_log_probs[1], dtype=torch.float)
-        batch_rtgs[0] = self.compute_rtgs(batch_rews[0])  # ALG STEP 4
-        batch_rtgs[1] = self.compute_rtgs(batch_rews[1])
-
-        # Log the episodic returns and episodic lengths in this batch.
-        self.logger['batch_rews1'] = batch_rews[0]
-        self.logger['batch_rews2'] = batch_rews[1]
-        self.logger['batch_lens'] = batch_lens[0]
-
-        return batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens
-
-        # A rollout with different conditions: we trigger the transition after failure (not a random one),
-        # we don't wait for a communication action if the other interface did a local action.
-    def rollout_proceed(self):
-        """
-            Too many transformers references, I'm sorry. This is where we collect the batch of data
-            from simulation. Since this is an on-policy algorithm, we'll need to collect a fresh batch
-            of data each time we iterate the actor/critic networks.
-            Parameters:
-                None
-            Return:
-                batch_obs - the observations collected this batch. Shape: (number of timesteps, dimension of observation)
-                batch_acts - the actions collected this batch. Shape: (number of timesteps, dimension of action)
-                batch_log_probs - the log probabilities of each action taken this batch. Shape: (number of timesteps)
-                batch_rtgs - the Rewards-To-Go of each timestep in this batch. Shape: (number of timesteps)
-                batch_lens - the lengths of each episode this batch. Shape: (number of episodes)
-        """
-
-        # get exploration values for the interfaces
-        exp_status = [self.dual_if.get_exploration_status(0), self.dual_if.get_exploration_status(1)]
-
-        # states lists (for each interface)
-        state = [[], []]
-        next_state = [[], []]
-        actor_hidden_state = [[], []]
-
-        # Batch data. For more details, check function header.
-        batch_obs = [[], []]
-        batch_acts = [[], []]
-        batch_log_probs = [[], []]
-        batch_rews = [[], []]
-        batch_rtgs = [[], []]
-        batch_lens = [[], []]
-
-        # Episodic data. Keeps track of rewards per episode, will get cleared
-        # upon each new episode
-        ep_rews = [[], []]
-
-        t = 0  # Keeps track of how many timesteps we've run so far this batch
-
-        # Keep simulating until we've run more than or equal to specified timesteps per batch
-        while t < self.timesteps_per_batch:
-            ep_rews[0] = []  # rewards collected per episode
-            ep_rews[1] = []
-
-            # Reset the environment. sNote that obs is short for observation.
-            self.dual_if.reset()
-            state[0] = self.dual_if.get_compound_state(0)
-            state[1] = self.dual_if.get_compound_state(1)
+            # Reset the environment. Note that obs is short for observation.
+            self.triple_if.reset()
+            state[0] = self.triple_if.get_compound_state(0)
+            state[1] = self.triple_if.get_compound_state(1)
+            state[2] = self.triple_if.get_compound_state(2)
 
             actor_hidden_state[0] = self.actor[0].init_hidden()
             actor_hidden_state[1] = self.actor[1].init_hidden()
+            actor_hidden_state[2] = self.actor[2].init_hidden()
+
+            checked_interface = [False, False, False]
+            reward = [0, 0, 0]
+            action = [0, 0, 0]
+            target_if_actions = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
 
             # Run an episode for a maximum of max_timesteps_per_episode timesteps
             for _ in range(self.max_timesteps_per_episode):
                 t += 1  # Increment timesteps ran this batch so far
 
-                # Calculate action and make a step, in both interfaces
-                action1, log_prob1, actor_hidden_state[0], fil_logits1 = self.get_action(state[0],
+                # Calculate action and make a step, in all interfaces
+
+                action[0], log_prob1, actor_hidden_state[0], fil_logits1 = self.get_action(state[0],
                                                                                          actor_hidden_state[0],
                                                                                          if_idx=0,
                                                                                          exploration=exp_status[0])
-                action2, log_prob2, actor_hidden_state[1], fil_logits2 = self.get_action(state[1],
+
+                action[1], log_prob2, actor_hidden_state[1], fil_logits2 = self.get_action(state[1],
                                                                                          actor_hidden_state[1],
                                                                                          if_idx=1,
                                                                                          exploration=exp_status[1])
 
-                # both actions are global, or at least one is local?
-                if self.dual_if.get_if(0).get_transition_by_idx(action1).is_global() and \
-                        self.dual_if.get_if(1).get_transition_by_idx(action2).is_global():
-                    next_state[0], next_state[1], reward1 = self.dual_if.step(action1, action2)
-                    reward2 = reward1
-                elif not self.dual_if.get_if(0).get_transition_by_idx(action1).is_global() and \
-                        self.dual_if.get_if(1).get_transition_by_idx(action2).is_global():
-                    next_state[0], reward1 = self.dual_if.local_step(action1, 0)
-                    next_state[1], _ = self.dual_if.local_step(action2, 1)
-                    reward2 = -1
-                elif self.dual_if.get_if(0).get_transition_by_idx(action1).is_global() and \
-                     not self.dual_if.get_if(1).get_transition_by_idx(action2).is_global():
-                    next_state[0], _ = self.dual_if.local_step(action1, 0)
-                    next_state[1], reward2 = self.dual_if.local_step(action2, 1)
-                    reward1 = -1
-                else:
-                    next_state[0], reward1 = self.dual_if.local_step(action1, 0)
-                    next_state[1], reward2 = self.dual_if.local_step(action2, 1)
+                action[2], log_prob3, actor_hidden_state[2], fil_logits3 = self.get_action(state[2],
+                                                                                         actor_hidden_state[2],
+                                                                                         if_idx=2,
+                                                                                         exploration=exp_status[2])
+
+                # check if two different interfaces tried to communicate with each other
+                if self.triple_if.check_comm_attempt(0, 1, action[0], action[1]):
+                    next_state[0], next_state[1], reward[0] = self.triple_if.step(0, 1, action[0], action[1])
+                    reward[1] = reward[0]
+                    checked_interface[0] = checked_interface[1] = True
+                elif self.triple_if.check_comm_attempt(0, 2, action[0], action[2]):
+                    next_state[0], next_state[2], reward[0] = self.triple_if.step(0, 2, action[0], action[2])
+                    reward[2] = reward[0]
+                    checked_interface[0] = checked_interface[2] = True
+                elif self.triple_if.check_comm_attempt(1, 2, action[1], action[2]):
+                    next_state[1], next_state[2], reward[1] = self.triple_if.step(1, 2, action[1], action[2])
+                    reward[2] = reward[1]
+                    checked_interface[1] = checked_interface[2] = True
+
+                # handle the other actions (missed communication or local actions)
+                for i in range(self.triple_if.if_count):
+                    if not checked_interface[i]:
+                        if self.triple_if.get_if(i).get_transition_by_idx(action[i]).is_global():
+                            next_state[i], reward[i] = self.triple_if.missed_global_step(action[i], i)
+                        else:
+                            next_state[i], reward[i] = self.triple_if.local_step(action[i], i)
+                        checked_interface[i] = True
+
+                # # update the target_if counter
+                # for i in range(self.triple_if.if_count):
+                #     full_tr = self.triple_if.get_if(i).get_transition_by_idx(action[i])
+                #     if full_tr.is_global():
+                #         target_if_actions[i][full_tr.get_target_if()] += 1
+                #
+                # if t % self.max_timesteps_per_episode == 0:
+                #     fairness_ratio = [0, 0, 0]
+                #     for i in range(self.triple_if.if_count):
+                #         fairness_ratio[i] = max(target_if_actions[i])/sum(target_if_actions[i])
+                #         reward[i] += (0.5 - fairness_ratio[i])*self.max_timesteps_per_episode
+                #
+                # if t == self.max_timesteps_per_episode:
+                #     print(fairness_ratio)
 
                 # Track recent observation, reward, action, and action log probability (if there was a progress)
                 batch_obs[0].append(state[0])
-                ep_rews[0].append(reward1)
-                batch_acts[0].append(action1)
+                ep_rews[0].append(reward[0])
+                batch_acts[0].append(action[0])
                 batch_log_probs[0].append(log_prob1)
                 state[0] = next_state[0]
 
                 batch_obs[1].append(state[1])
-                ep_rews[1].append(reward2)
-                batch_acts[1].append(action2)
+                ep_rews[1].append(reward[1])
+                batch_acts[1].append(action[1])
                 batch_log_probs[1].append(log_prob2)
                 state[1] = next_state[1]
+
+                batch_obs[2].append(state[2])
+                ep_rews[2].append(reward[2])
+                batch_acts[2].append(action[2])
+                batch_log_probs[2].append(log_prob3)
+                state[2] = next_state[2]
+
+                # reset rewards and actions
+                reward = [0, 0, 0]
+                action = [0, 0, 0]
+                checked_interface = [False, False, False]
 
             # Track episodic lengths and rewards
             batch_lens[0].append(self.max_timesteps_per_episode)
             batch_lens[1].append(self.max_timesteps_per_episode)
+            batch_lens[2].append(self.max_timesteps_per_episode)
 
-            # Fill the shorter episode with padding
-            # pad_length = self.max_timesteps_per_episode - min(actions_count1, actions_count2)
-            # if actions_count1 < actions_count2:
-            #     for _ in range(pad_length):
-            #         batch_obs[0].append([0] * len(state[0]))
-            #         ep_rews[0].append(0)
-            #         batch_acts[0].append(0)
-            #         batch_log_probs[0].append(torch.tensor(0, dtype=torch.float))
-            # else:
-            #     for _ in range(pad_length):
-            #         batch_obs[1].append([0] * len(state[1]))
-            #         ep_rews[1].append(0)
-            #         batch_acts[1].append(0)
-            #         batch_log_probs[1].append(torch.tensor(0, dtype=torch.float))
-
-            # Do this anyway
             batch_rews[0].append(ep_rews[0])
             batch_rews[1].append(ep_rews[1])
+            batch_rews[2].append(ep_rews[2])
 
         # print actions
         print(self.get_actions_seq(batch_acts[0][0:self.max_timesteps_per_episode], 0))
         print(self.get_actions_seq(batch_acts[1][0:self.max_timesteps_per_episode], 1))
+        print(self.get_actions_seq(batch_acts[2][0:self.max_timesteps_per_episode], 2))
 
         # Reshape data as tensors in the shape specified in function description, before returning
         batch_obs[0] = torch.tensor(batch_obs[0], dtype=torch.float)
         batch_obs[1] = torch.tensor(batch_obs[1], dtype=torch.float)
+        batch_obs[2] = torch.tensor(batch_obs[2], dtype=torch.float)
         batch_acts[0] = torch.tensor(batch_acts[0], dtype=torch.float)
         batch_acts[1] = torch.tensor(batch_acts[1], dtype=torch.float)
+        batch_acts[2] = torch.tensor(batch_acts[2], dtype=torch.float)
         batch_log_probs[0] = torch.tensor(batch_log_probs[0], dtype=torch.float)
         batch_log_probs[1] = torch.tensor(batch_log_probs[1], dtype=torch.float)
+        batch_log_probs[2] = torch.tensor(batch_log_probs[2], dtype=torch.float)
         batch_rtgs[0] = self.compute_rtgs(batch_rews[0])  # ALG STEP 4
         batch_rtgs[1] = self.compute_rtgs(batch_rews[1])
+        batch_rtgs[2] = self.compute_rtgs(batch_rews[2])
 
         # Log the episodic returns and episodic lengths in this batch.
         self.logger['batch_rews1'] = batch_rews[0]
         self.logger['batch_rews2'] = batch_rews[1]
+        self.logger['batch_rews3'] = batch_rews[2]
         self.logger['batch_lens'] = batch_lens[0]
 
         return batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens
@@ -525,15 +441,8 @@ class PPO:
 
         temperature = max(1, self.initial_temperature)
 
-        if if_idx == 0:
-            available_actions_idx = [self.dual_if.if1.get_transition_idx(tr_name) for tr_name in
-                                     self.dual_if.if1.available_transitions()]
-        elif if_idx == 1:
-            available_actions_idx = [self.dual_if.if2.get_transition_idx(tr_name) for tr_name in
-                                     self.dual_if.if2.available_transitions()]
-        else:
-            raise Exception("No such interface")
-
+        available_actions_idx = [self.triple_if.get_if(if_idx).get_transition_idx(tr_name, tr_target_if=i)
+                                 for tr_name, i in self.triple_if.get_if(if_idx).available_transitions_with_if()]
 
         # Query the actor network
         state = torch.tensor(state, dtype=torch.float).view(1, 1, -1)
@@ -589,7 +498,8 @@ class PPO:
         return V, log_probs
 
     def get_actions_seq(self, act_lst, if_num):
-        return [self.dual_if.get_if(if_num).get_transition_by_idx(act).name for act in act_lst]
+        return [(self.triple_if.get_if(if_num).get_transition_by_idx(act).name,
+                self.triple_if.get_if(if_num).get_transition_by_idx(act).target_if_idx) for act in act_lst]
 
     def _init_hyperparameters(self, hyperparameters):
         """
@@ -643,12 +553,14 @@ class PPO:
         avg_ep_lens = np.mean(self.logger['batch_lens'])
         avg_ep_rews1 = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews1']])
         avg_ep_rews2 = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews2']])
+        avg_ep_rews3 = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews3']])
         avg_actor_loss = np.mean([losses.float().mean() for losses in self.logger['actor_losses']])
 
         # Round decimal places for more aesthetic logging messages
         avg_ep_lens = str(round(avg_ep_lens, 2))
         avg_ep_rews1 = str(round(avg_ep_rews1, 2))
         avg_ep_rews2 = str(round(avg_ep_rews2, 2))
+        avg_ep_rews3 = str(round(avg_ep_rews3, 2))
         avg_actor_loss = str(round(avg_actor_loss, 5))
 
         # Print logging statements
@@ -657,12 +569,43 @@ class PPO:
         print(f"Average Episodic Length: {avg_ep_lens}", flush=True)
         print(f"Interface 1 Average Episodic Return: {avg_ep_rews1}", flush=True)
         print(f"Interface 2 Average Episodic Return: {avg_ep_rews2}", flush=True)
+        print(f"Interface 3 Average Episodic Return: {avg_ep_rews3}", flush=True)
         print(f"Average Loss: {avg_actor_loss}", flush=True)
         print(f"Timesteps So Far: {t_so_far}", flush=True)
         print(f"------------------------------------------------------", flush=True)
         print(flush=True)
 
+        # save rewards figure
+        self.make_rewards_graph(f'Average Rewards as a function of Learning Epochs',
+                                f'Learning Epochs',
+                                f'Average Rewards',
+                                self.triple_if.get_if(0).name,
+                                self.triple_if.get_if(1).name,
+                                self.triple_if.get_if(2).name)
+
         # Reset batch-specific logging data
         self.logger['batch_lens'] = []
-        self.logger['batch_rews'] = []
+        self.logger['batch_rews1'] = []
+        self.logger['batch_rews2'] = []
+        self.logger['batch_rews3'] = []
         self.logger['actor_losses'] = []
+
+    def make_rewards_graph(self, title_label, xlabel, ylabel, llabel1, llabel2, llabel3):
+        path = f"./figures/rew_graphs.png"
+
+        avg_ep_rews1 = [np.sum(ep_rews) for ep_rews in self.logger['avg_ep_returns1']]
+        avg_ep_rews2 = [np.sum(ep_rews) for ep_rews in self.logger['avg_ep_returns2']]
+        avg_ep_rews3 = [np.sum(ep_rews) for ep_rews in self.logger['avg_ep_returns3']]
+        batch_count = len(avg_ep_rews1)
+        x_axis = list(range(1, batch_count+1))
+
+        plt.plot(x_axis, avg_ep_rews1, label=llabel1)
+        plt.plot(x_axis, avg_ep_rews2, label=llabel2)
+        plt.plot(x_axis, avg_ep_rews3, label=llabel3)
+
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.title(title_label)
+        plt.legend()
+        plt.savefig(path)
+        plt.clf()
