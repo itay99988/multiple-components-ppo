@@ -709,36 +709,35 @@ def triple_symmetry_experiment_setup(history_len=2):
 
 # client server scenario with an RNN controller
 def client_server_experiment_setup(history_len=2):
-    t5 = Transition('l', 'e1', 'e2', target_if_idx=-1, reward=0.1, global_action=False)
 
     # transitions - server (0)
     t1 = Transition('a', 's1', 's4', target_if_idx=1, reward=3)
     t2 = Transition('a', 's1', 's4', target_if_idx=2, reward=3)
     t3 = Transition('b', 's1', 's2', target_if_idx=1, reward=3)
     t4 = Transition('b', 's1', 's2', target_if_idx=2, reward=3)
-    t5 = Transition('w', 's1', 's1', target_if_idx=-1, reward=0.1, global_action=False)
-    t6 = Transition('w', 's1', 's1', target_if_idx=-1, reward=0.1, global_action=False)
-    t7 = Transition('l', 's2', 's3', target_if_idx=-1, reward=0.1, global_action=False)
-    t8 = Transition('l', 's3', 's1', target_if_idx=-1, reward=0.1, global_action=False)
-    t9 = Transition('l', 's4', 's5', target_if_idx=-1, reward=0.1, global_action=False)
-    t10 = Transition('l', 's5', 's6', target_if_idx=-1, reward=0.1, global_action=False)
-    t11 = Transition('l', 's6', 's1', target_if_idx=-1, reward=0.1, global_action=False)
+    t5 = Transition('w', 's1', 's1', target_if_idx=9, reward=0.1, global_action=False)
+    t6 = Transition('w', 's1', 's1', target_if_idx=9, reward=0.1, global_action=False)
+    t7 = Transition('l', 's2', 's3', target_if_idx=9, reward=0.1, global_action=False)
+    t8 = Transition('l', 's3', 's1', target_if_idx=9, reward=0.1, global_action=False)
+    t9 = Transition('l', 's4', 's5', target_if_idx=9, reward=0.1, global_action=False)
+    t10 = Transition('l', 's5', 's6', target_if_idx=9, reward=0.1, global_action=False)
+    t11 = Transition('l', 's6', 's1', target_if_idx=9, reward=0.1, global_action=False)
 
     # transitions - client(1)
     t12 = Transition('a', 'e1', 'e2', target_if_idx=0, reward=3)
     t13 = Transition('b', 'e1', 'e3', target_if_idx=0, reward=3)
-    t14 = Transition('l', 'e1', 'e4', target_if_idx=-1, reward=0.1, global_action=False)
-    t15 = Transition('l', 'e2', 'e1', target_if_idx=-1, reward=0.1, global_action=False)
-    t16 = Transition('l', 'e3', 'e2', target_if_idx=-1, reward=0.1, global_action=False)
-    t17 = Transition('l', 'e4', 'e1', target_if_idx=-1, reward=0.1, global_action=False)
+    t14 = Transition('l', 'e1', 'e4', target_if_idx=9, reward=0.1, global_action=False)
+    t15 = Transition('l', 'e2', 'e1', target_if_idx=9, reward=0.1, global_action=False)
+    t16 = Transition('l', 'e3', 'e2', target_if_idx=9, reward=0.1, global_action=False)
+    t17 = Transition('l', 'e4', 'e1', target_if_idx=9, reward=0.1, global_action=False)
 
     # transitions - client(2)
     t18 = Transition('a', 'g1', 'g2', target_if_idx=0, reward=3)
     t19 = Transition('b', 'g1', 'g3', target_if_idx=0, reward=3)
-    t20 = Transition('l', 'g1', 'g4', target_if_idx=-1, reward=0.1, global_action=False)
-    t21 = Transition('l', 'g2', 'g1', target_if_idx=-1, reward=0.1, global_action=False)
-    t22 = Transition('l', 'g3', 'g2', target_if_idx=-1, reward=0.1, global_action=False)
-    t23 = Transition('l', 'g4', 'g1', target_if_idx=-1, reward=0.1, global_action=False)
+    t20 = Transition('l', 'g1', 'g4', target_if_idx=9, reward=0.1, global_action=False)
+    t21 = Transition('l', 'g2', 'g1', target_if_idx=9, reward=0.1, global_action=False)
+    t22 = Transition('l', 'g3', 'g2', target_if_idx=9, reward=0.1, global_action=False)
+    t23 = Transition('l', 'g4', 'g1', target_if_idx=9, reward=0.1, global_action=False)
 
     # processes
     if1 = Process('Server', states=['s1', 's2', 's3', 's4', 's5', 's6'],

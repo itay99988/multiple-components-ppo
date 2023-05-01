@@ -279,7 +279,8 @@ class PPO:
             checked_interface = [False, False, False]
             reward = [0, 0, 0]
             action = [0, 0, 0]
-            target_if_actions = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+            missed_counter = [0, 0, 0]
+            local_counter = [0, 0, 0]
 
             # Run an episode for a maximum of max_timesteps_per_episode timesteps
             for _ in range(self.max_timesteps_per_episode):
@@ -321,24 +322,22 @@ class PPO:
                     if not checked_interface[i]:
                         if self.triple_if.get_if(i).get_transition_by_idx(action[i]).is_global():
                             next_state[i], reward[i] = self.triple_if.missed_global_step(action[i], i)
+                            missed_counter[i] += 1
                         else:
                             next_state[i], reward[i] = self.triple_if.local_step(action[i], i)
+                            local_counter[i] += 1
                         checked_interface[i] = True
 
-                # # update the target_if counter
-                # for i in range(self.triple_if.if_count):
-                #     full_tr = self.triple_if.get_if(i).get_transition_by_idx(action[i])
-                #     if full_tr.is_global():
-                #         target_if_actions[i][full_tr.get_target_if()] += 1
-                #
-                # if t % self.max_timesteps_per_episode == 0:
-                #     fairness_ratio = [0, 0, 0]
-                #     for i in range(self.triple_if.if_count):
-                #         fairness_ratio[i] = max(target_if_actions[i])/sum(target_if_actions[i])
-                #         reward[i] += (0.5 - fairness_ratio[i])*self.max_timesteps_per_episode
-                #
-                # if t == self.max_timesteps_per_episode:
-                #     print(fairness_ratio)
+                if t % self.max_timesteps_per_episode == 0:
+                    fractional_reward = (1 / 3) - (max(missed_counter)/sum(missed_counter)) if sum(missed_counter) > 0 \
+                                        else 0
+                    local_reward = 5 if max(local_counter) >= 15 else 0
+                    for i in range(self.triple_if.if_count):
+                        reward[i] += fractional_reward * 5 - local_reward
+
+                if t == self.max_timesteps_per_episode:
+                    print(missed_counter)
+                    print(reward[i])
 
                 # Track recent observation, reward, action, and action log probability (if there was a progress)
                 batch_obs[0].append(state[0])

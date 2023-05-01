@@ -113,8 +113,8 @@ class TripleInterface(DistSystem):
 
     def local_step(self, if_tr_idx, if_idx):
         if_tr = self.get_if(if_idx).transitions[if_tr_idx].name
-        full_if_tr = self.get_if(if_idx).copy_transition_w_status(if_tr, -1, status=SUCCESS)
-        self.if_execution[if_idx].append(self.get_if(if_idx).copy_transition_w_status(if_tr, -1, status=SUCCESS))
+        full_if_tr = self.get_if(if_idx).copy_transition_w_status(if_tr, 9, status=SUCCESS)
+        self.if_execution[if_idx].append(self.get_if(if_idx).copy_transition_w_status(if_tr, 9, status=SUCCESS))
 
         # trigger the transition for the interface
         reward = self.get_if(if_idx).get_transition_reward(if_tr)
