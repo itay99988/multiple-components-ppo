@@ -31,7 +31,7 @@ def get_args():
     parser.add_argument('--total_timesteps', dest='total_timesteps', type=int, default='750000')  # total timesteps
     parser.add_argument('--init_tem', dest='initial_temperature', type=float, default='2.5')  # initial temperature
     parser.add_argument('--tem_decay', dest='temperature_decay', type=float, default='1.01')  #temperature decay factor
-    parser.add_argument('--end_cond', dest='end_cond_threshold', type=float, default='1.5')  # end condition percentage
+    parser.add_argument('--end_cond', dest='end_cond_threshold', type=float, default='2.5')  # end condition percentage
 
     args = parser.parse_args()
 

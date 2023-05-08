@@ -281,6 +281,7 @@ class PPO:
             action = [0, 0, 0]
             missed_counter = [0, 0, 0]
             local_counter = [0, 0, 0]
+            server_success_counter = [0, 0, 0]
 
             # Run an episode for a maximum of max_timesteps_per_episode timesteps
             for _ in range(self.max_timesteps_per_episode):
@@ -308,10 +309,14 @@ class PPO:
                     next_state[0], next_state[1], reward[0] = self.triple_if.step(0, 1, action[0], action[1])
                     reward[1] = reward[0]
                     checked_interface[0] = checked_interface[1] = True
+                    if reward[0] > 0:
+                        server_success_counter[1] += 1
                 elif self.triple_if.check_comm_attempt(0, 2, action[0], action[2]):
                     next_state[0], next_state[2], reward[0] = self.triple_if.step(0, 2, action[0], action[2])
                     reward[2] = reward[0]
                     checked_interface[0] = checked_interface[2] = True
+                    if reward[0] > 0:
+                        server_success_counter[2] += 1
                 elif self.triple_if.check_comm_attempt(1, 2, action[1], action[2]):
                     next_state[1], next_state[2], reward[1] = self.triple_if.step(1, 2, action[1], action[2])
                     reward[2] = reward[1]
@@ -329,15 +334,16 @@ class PPO:
                         checked_interface[i] = True
 
                 if t % self.max_timesteps_per_episode == 0:
-                    fractional_reward = (1 / 3) - (max(missed_counter)/sum(missed_counter)) if sum(missed_counter) > 0 \
-                                        else 0
-                    local_reward = 5 if max(local_counter) >= 15 else 0
+                    #two_agents_cond = server_success_counter[1] > 0 and server_success_counter[2] > 0
+                    two_clients_bonus = 5 * min(server_success_counter[1:3])
+                    local_penalty = 5 if max(local_counter) >= 15 else 0
                     for i in range(self.triple_if.if_count):
-                        reward[i] += fractional_reward * 5 - local_reward
+                        reward[i] += (-1*local_penalty)
+                    reward[0] += two_clients_bonus
 
                 if t == self.max_timesteps_per_episode:
-                    print(missed_counter)
-                    print(reward[i])
+                    print(server_success_counter)
+                    print(two_clients_bonus, local_penalty)
 
                 # Track recent observation, reward, action, and action log probability (if there was a progress)
                 batch_obs[0].append(state[0])

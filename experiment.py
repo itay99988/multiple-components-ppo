@@ -749,3 +749,41 @@ def client_server_experiment_setup(history_len=2):
     dist_sys = TripleInterface('client_server', if1=if1, if2=if2, if3=if3, history_len=history_len)
 
     return dist_sys
+
+
+# client server2 scenario with an RNN controller
+def client_server2_experiment_setup(history_len=2):
+
+    # transitions - server (0)
+    t1 = Transition('c', 's1', 's1', target_if_idx=1, reward=3)
+    t2 = Transition('c', 's1', 's1', target_if_idx=2, reward=3)
+    t3 = Transition('d', 's1', 's1', target_if_idx=1, reward=3)
+    t4 = Transition('d', 's1', 's1', target_if_idx=2, reward=3)
+    t5 = Transition('l', 's1', 's1', target_if_idx=9, reward=0.1, global_action=False)
+
+
+    # transitions - client(1)
+    t12 = Transition('a', 'e1', 'e2', target_if_idx=0, reward=3)
+    t13 = Transition('b', 'e1', 'e3', target_if_idx=0, reward=3)
+    t14 = Transition('l', 'e1', 'e4', target_if_idx=9, reward=0.1, global_action=False)
+    t15 = Transition('l', 'e2', 'e1', target_if_idx=9, reward=0.1, global_action=False)
+
+
+    # transitions - client(2)
+    t18 = Transition('a', 'g1', 'g2', target_if_idx=0, reward=3)
+    t19 = Transition('b', 'g1', 'g3', target_if_idx=0, reward=3)
+    t20 = Transition('l', 'g1', 'g4', target_if_idx=9, reward=0.1, global_action=False)
+    t21 = Transition('l', 'g2', 'g1', target_if_idx=9, reward=0.1, global_action=False)
+    t22 = Transition('l', 'g3', 'g2', target_if_idx=9, reward=0.1, global_action=False)
+    t23 = Transition('l', 'g4', 'g1', target_if_idx=9, reward=0.1, global_action=False)
+
+    # processes
+    if1 = Process('Server', states=['s1', 's2', 's3', 's4', 's5', 's6'],
+                         transitions=[t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11], initial_state='s1')
+    if2 = Process('Client1', states=['e1', 'e2', 'e3', 'e4'], transitions=[t12, t13, t14, t15, t16, t17], initial_state='e1')
+    if3 = Process('Client2', states=['g1', 'g2', 'g3', 'g4'], transitions=[t18, t19, t20, t21, t22, t23], initial_state='g1')
+
+    # distributed system
+    dist_sys = TripleInterface('client_server2', if1=if1, if2=if2, if3=if3, history_len=history_len)
+
+    return dist_sys
