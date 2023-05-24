@@ -40,6 +40,10 @@ def experiment_selector(experiment, history_len):
 		return social_dilemma_experiment_setup(history_len)
 	elif experiment == 'hold_back':
 		return hold_back_experiment_setup(history_len)
+	elif experiment == 'abcde_coordination':
+		return abcde_coordination_experiment_setup(history_len)
+	elif experiment == 'wait_to_succeed':
+		return wait_to_succeed_experiment_setup(history_len)
 	else:
 		return None
 

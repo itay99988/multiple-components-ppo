@@ -105,6 +105,13 @@ class Process:
                 available.append(tr.name)
         return available
 
+    def available_local_transitions(self):
+        available = []
+        for tr in self.transitions:
+            if tr.source_state == self.current_state and not tr.is_global():
+                available.append(tr.name)
+        return available
+
     # switches the process' state according to the transition tr_name.
     def trigger_transition(self, tr_name):
         try:
@@ -118,6 +125,13 @@ class Process:
     # chooses a random available state uniformly
     def get_random_transition(self):
         return random.choice(self.available_transitions())
+
+    def get_random_local_transition(self):
+        local_tr_lst = self.available_local_transitions()
+
+        if not local_tr_lst:
+            return None
+        return random.choice(local_tr_lst)
 
     # checks if a certain transition is currently enabled
     def is_transition_enabled(self, tr_name):

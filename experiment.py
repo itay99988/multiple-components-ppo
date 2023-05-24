@@ -643,3 +643,79 @@ def hold_back_experiment_setup(history_len=2):
     dist_sys = DualInterface('hold_back', if1=if1, if2=if2, history_len=history_len)
 
     return dist_sys
+
+
+# abcde_coordination scenario with an RNN controller
+def abcde_coordination_experiment_setup(history_len=2):
+    # transitions - interface1
+    t1 = Transition('a', 'g1', 'g2', reward=1)
+    t2 = Transition('b', 'g2', 'g2', reward=1)
+    t3 = Transition('c', 'g2', 'g3', reward=1)
+    t4 = Transition('d', 'g3', 'g3', reward=1)
+    t5 = Transition('e', 'g3', 'g1', reward=1)
+
+    # transitions - interface2
+    t6 = Transition('e', 'e1', 'e1', reward=1)
+    t7 = Transition('l', 'e1', 'e1', reward=0.01, global_action=False)
+    t8 = Transition('a', 'e1', 'e2', reward=1)
+    t9 = Transition('e', 'e2', 'e2', reward=1)
+    t10 = Transition('l', 'e2', 'e2', reward=0.01, global_action=False)
+    t11 = Transition('b', 'e2', 'e3', reward=1)
+    t12 = Transition('e', 'e3', 'e3', reward=1)
+    t13 = Transition('l', 'e3', 'e3', reward=0.01, global_action=False)
+    t14 = Transition('c', 'e3', 'e4', reward=1)
+    t15 = Transition('e', 'e4', 'e4', reward=1)
+    t16 = Transition('l', 'e4', 'e4', reward=0.01, global_action=False)
+    t17 = Transition('d', 'e4', 'e1', reward=1)
+
+    # processes
+    if1 = Process('if1', states=['g1', 'g2', 'g3'],
+                         transitions=[t1, t2, t3, t4, t5], initial_state='g1')
+    if2 = Process('if2', states=['e1', 'e2', 'e3', 'e4'],
+                         transitions=[t6, t7, t8, t9, t10, t11,
+                                      t12, t13, t14, t15, t16, t17], initial_state='e1')
+
+    # distributed system
+    dist_sys = DualInterface('abcde_coordination', if1=if1, if2=if2, history_len=history_len)
+
+    return dist_sys
+
+
+# abcde_coordination scenario with an RNN controller
+def wait_to_succeed_experiment_setup(history_len=2):
+    # transitions - interface1
+    t1 = Transition('a', 'g1', 'g2', reward=1)
+    t2 = Transition('l', 'g1', 'g4', reward=0.02, global_action=False)
+    t3 = Transition('b', 'g2', 'g3', reward=1)
+    t4 = Transition('l', 'g2', 'g2', reward=0.02, global_action=False)
+    t5 = Transition('c', 'g3', 'g1', reward=1)
+    t6 = Transition('l', 'g3', 'g3', reward=0.02, global_action=False)
+    t7 = Transition('d', 'g4', 'g6', reward=1)
+    t8 = Transition('l1', 'g4', 'g4', reward=0.02, global_action=False)
+    t9 = Transition('l2', 'g4', 'g5', reward=0.02, global_action=False)
+    t10 = Transition('f', 'g5', 'g5', reward=1)
+    t11 = Transition('d', 'g6', 'g6', reward=1)
+
+    # transitions - interface2
+    t12 = Transition('a', 'e1', 'e2', reward=1)
+    t13 = Transition('b', 'e2', 'e3', reward=1)
+    t14 = Transition('d', 'e2', 'e7', reward=1)
+    t15 = Transition('c', 'e3', 'e4', reward=1)
+    t16 = Transition('d', 'e3', 'e7', reward=1)
+    t17 = Transition('l', 'e4', 'e5', reward=0.02, global_action=False)
+    t18 = Transition('d', 'e4', 'e7', reward=1)
+    t19 = Transition('l', 'e5', 'e6', reward=0.02, global_action=False)
+    t20 = Transition('d', 'e5', 'e7', reward=1)
+    t21 = Transition('d', 'e6', 'e6', reward=1)
+    t22 = Transition('c', 'e7', 'e7', reward=1)
+
+    # processes
+    if1 = Process('if1', states=['g1', 'g2', 'g3', 'g4', 'g5', 'g6'],
+                         transitions=[t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11], initial_state='g1')
+    if2 = Process('if2', states=['e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7'],
+                         transitions=[t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22], initial_state='e1')
+
+    # distributed system
+    dist_sys = DualInterface('wait_to_succeed', if1=if1, if2=if2, history_len=history_len)
+
+    return dist_sys

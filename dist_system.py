@@ -104,14 +104,15 @@ class DualInterface(DistSystem):
             self.if1_execution.append(self.if1.copy_transition_w_status(if1_tr, status=FAIL))
             self.if2_execution.append(self.if2.copy_transition_w_status(if2_tr, status=FAIL))
 
-            if1_rnd_tr = self.if1.get_random_transition()
-            if2_rnd_tr = self.if2.get_random_transition()
+            if1_rnd_tr = self.if1.get_random_local_transition()
+            if2_rnd_tr = self.if2.get_random_local_transition()
 
             # trigger the randomly chosen transitions for both interfaces
             reward = -1 * max(self.if1.get_transition_reward(if1_tr), self.if2.get_transition_reward(if2_tr))
-            self.if1.trigger_transition(if1_rnd_tr)
-            self.if2.trigger_transition(if2_rnd_tr)
-
+            if if1_rnd_tr is not None:
+                self.if1.trigger_transition(if1_rnd_tr)
+            if if2_rnd_tr is not None:
+                self.if2.trigger_transition(if2_rnd_tr)
 
         if1_partial_state = self.if1.get_rnn_input(full_if1_tr)
         if2_partial_state = self.if2.get_rnn_input(full_if2_tr)
@@ -155,6 +156,43 @@ class DualInterface(DistSystem):
             # building compound states for both interfaces
             self.if2_state_history.append(if_partial_state)
             if_next_state = self.get_compound_state(1)
+
+        else:
+            raise Exception("No such interface")
+
+        return if_next_state, reward
+
+    def missed_global_step(self, if_tr_idx, if_idx):
+
+        if if_idx == 0:
+            if_tr = self.if1.transitions[if_tr_idx].name
+
+            full_if_tr = self.if1.copy_transition_w_status(if_tr, status=FAIL)
+            self.if1_execution.append(self.if1.copy_transition_w_status(if_tr, status=FAIL))
+
+            if_partial_state = self.if1.get_rnn_input(full_if_tr)
+
+            # building compound state for the interface
+            self.if1_state_history.append(if_partial_state)
+            if_next_state = self.get_compound_state(0)
+
+            # assign a reward of zero for a missed communication action
+            reward = 0
+
+        elif if_idx == 1:
+            if_tr = self.if2.transitions[if_tr_idx].name
+
+            full_if_tr = self.if2.copy_transition_w_status(if_tr, status=FAIL)
+            self.if2_execution.append(self.if2.copy_transition_w_status(if_tr, status=FAIL))
+
+            if_partial_state = self.if2.get_rnn_input(full_if_tr)
+
+            # building compound state for the interface
+            self.if2_state_history.append(if_partial_state)
+            if_next_state = self.get_compound_state(1)
+
+            # assign a reward of zero for a missed communication action
+            reward = 0
 
         else:
             raise Exception("No such interface")

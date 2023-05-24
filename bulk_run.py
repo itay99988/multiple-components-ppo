@@ -28,7 +28,7 @@ def run_experiment(params):
 
 
 BASIC_PARAMS = {
-    'experiment': 'permitted',
+    'experiment': 'wait_to_succeed',
     'batch_timesteps': 4000,
     'episode_timesteps': 20,
     'gamma': 0.99,
@@ -37,9 +37,12 @@ BASIC_PARAMS = {
     'clip': 0.2,
     'init_tem': 2.5,
     'tem_decay': 1.01,
-    'end_cond': 0.99,
+    'end_cond': 0.78,
     'total_timesteps': 1500000
 }
 
+run_experiment({})
+run_experiment({})
+run_experiment({})
 run_experiment({})
 run_experiment({})

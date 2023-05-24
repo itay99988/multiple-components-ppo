@@ -220,6 +220,9 @@ class PPO:
 
         t = 0  # Keeps track of how many timesteps we've run so far this batch
 
+        if1_suspend = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+        if2_suspend = []
+
         # Keep simulating until we've run more than or equal to specified timesteps per batch
         while t < self.timesteps_per_batch:
             ep_rews[0] = []  # rewards collected per episode
@@ -235,12 +238,22 @@ class PPO:
 
             triggered_tr1 = triggered_tr2 = True
             actions_count1 = actions_count2 = 0
+            timestep_count = 0
 
             t += self.max_timesteps_per_episode
             # Run an episode for a maximum of max_timesteps_per_episode timesteps
             while max(actions_count1, actions_count2) < self.max_timesteps_per_episode:
 
                 # t += 1  # Increment timesteps ran this batch so far
+                if timestep_count in if1_suspend:
+                    triggered_tr1 = False
+                else:
+                    triggered_tr1 = True
+
+                if timestep_count in if2_suspend:
+                    triggered_tr2 = False
+                else:
+                    triggered_tr2 = True
 
                 # Calculate action and make a step, in both interfaces
                 if triggered_tr1:
@@ -248,34 +261,33 @@ class PPO:
                                                                                              actor_hidden_state[0],
                                                                                              if_idx=0,
                                                                                              exploration=exp_status[0])
+                    actions_count1 += 1
+
                 if triggered_tr2:
                     action2, log_prob2, actor_hidden_state[1], fil_logits2 = self.get_action(state[1],
                                                                                              actor_hidden_state[1],
                                                                                              if_idx=1,
                                                                                              exploration=exp_status[1])
+                    actions_count2 += 1
 
                 # both actions are global, or at least one is local?
                 if self.dual_if.get_if(0).get_transition_by_idx(action1).is_global() and \
-                   self.dual_if.get_if(1).get_transition_by_idx(action2).is_global():
+                   self.dual_if.get_if(1).get_transition_by_idx(action2).is_global() and \
+                   triggered_tr1 and triggered_tr2:
                     next_state[0], next_state[1], reward1 = self.dual_if.step(action1, action2)
                     reward2 = reward1
-                    triggered_tr1 = triggered_tr2 = True
-                    actions_count1 += 1
-                    actions_count2 += 1
                 else:
-                    if not self.dual_if.get_if(0).get_transition_by_idx(action1).is_global():
-                        next_state[0], reward1 = self.dual_if.local_step(action1, 0)
-                        triggered_tr1 = True
-                        actions_count1 += 1
-                    else:
-                        triggered_tr1 = False
+                    if triggered_tr1:
+                        if not self.dual_if.get_if(0).get_transition_by_idx(action1).is_global():
+                            next_state[0], reward1 = self.dual_if.local_step(action1, 0)
+                        else:
+                            next_state[0], reward1 = self.dual_if.missed_global_step(action1, 0)
 
-                    if not self.dual_if.get_if(1).get_transition_by_idx(action2).is_global():
-                        next_state[1], reward2 = self.dual_if.local_step(action2, 1)
-                        triggered_tr2 = True
-                        actions_count2 += 1
-                    else:
-                        triggered_tr2 = False
+                    if triggered_tr2:
+                        if not self.dual_if.get_if(1).get_transition_by_idx(action2).is_global():
+                            next_state[1], reward2 = self.dual_if.local_step(action2, 1)
+                        else:
+                            next_state[1], reward2 = self.dual_if.missed_global_step(action2, 1)
 
                 # Track recent observation, reward, action, and action log probability (if there was a progress)
                 if triggered_tr1:
@@ -294,9 +306,10 @@ class PPO:
 
                     state[1] = next_state[1]
 
+                timestep_count += 1
+
                 # if t == 1:
                 #     print(F.softmax(fil_logits, dim=0))
-
 
             # Track episodic lengths and rewards
             batch_lens[0].append(self.max_timesteps_per_episode)
@@ -443,21 +456,6 @@ class PPO:
             # Track episodic lengths and rewards
             batch_lens[0].append(self.max_timesteps_per_episode)
             batch_lens[1].append(self.max_timesteps_per_episode)
-
-            # Fill the shorter episode with padding
-            # pad_length = self.max_timesteps_per_episode - min(actions_count1, actions_count2)
-            # if actions_count1 < actions_count2:
-            #     for _ in range(pad_length):
-            #         batch_obs[0].append([0] * len(state[0]))
-            #         ep_rews[0].append(0)
-            #         batch_acts[0].append(0)
-            #         batch_log_probs[0].append(torch.tensor(0, dtype=torch.float))
-            # else:
-            #     for _ in range(pad_length):
-            #         batch_obs[1].append([0] * len(state[1]))
-            #         ep_rews[1].append(0)
-            #         batch_acts[1].append(0)
-            #         batch_log_probs[1].append(torch.tensor(0, dtype=torch.float))
 
             # Do this anyway
             batch_rews[0].append(ep_rews[0])
