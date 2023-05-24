@@ -89,14 +89,16 @@ class TripleInterface(DistSystem):
                                                                                             if2_tr_target_if,
                                                                                             status=FAIL))
 
-            if1_rnd_tr = self.get_if(if1_idx).get_random_transition()
-            if2_rnd_tr = self.get_if(if2_idx).get_random_transition()
+            if1_rnd_tr = self.get_if(if1_idx).get_random_local_transition()
+            if2_rnd_tr = self.get_if(if2_idx).get_random_local_transition()
 
             # trigger the randomly chosen transitions for both interfaces
             reward = -1 * max(self.get_if(if1_idx).get_transition_reward(if1_tr),
                               self.get_if(if2_idx).get_transition_reward(if2_tr))
-            self.get_if(if1_idx).trigger_transition(if1_rnd_tr)
-            self.get_if(if2_idx).trigger_transition(if2_rnd_tr)
+            if if1_rnd_tr is not None:
+                self.get_if(if1_idx).trigger_transition(if1_rnd_tr)
+            if if2_rnd_tr is not None:
+                self.get_if(if2_idx).trigger_transition(if2_rnd_tr)
 
 
         if1_partial_state = self.get_if(if1_idx).get_rnn_input(full_if1_tr)
