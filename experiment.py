@@ -750,3 +750,49 @@ def client_server_experiment_setup(history_len=2):
     dist_sys = TripleInterface('client_server', if1=if1, if2=if2, if3=if3, history_len=history_len)
 
     return dist_sys
+
+
+# triple coordination2 scenario with an RNN controller
+def triple_coordination2_experiment_setup(history_len=2):
+    # transitions - interface1
+    t1 = Transition('e', 's1', 's1', target_if_idx=1, reward=1)
+    t2 = Transition('e', 's1', 's1', target_if_idx=2, reward=1)
+    t3 = Transition('f', 's1', 's1', target_if_idx=1, reward=1)
+    t4 = Transition('f', 's1', 's1', target_if_idx=2, reward=1)
+    t5 = Transition('a', 's1', 's2', target_if_idx=1, reward=1)
+    t6 = Transition('d', 's2', 's2', target_if_idx=1, reward=1)
+    t0 = Transition('d', 's2', 's2', target_if_idx=2, reward=1)
+    t7 = Transition('b', 's2', 's3', target_if_idx=1, reward=1)
+    t8 = Transition('e', 's3', 's3', target_if_idx=1, reward=1)
+    t9 = Transition('e', 's3', 's3', target_if_idx=2, reward=1)
+    t10 = Transition('c', 's3', 's1', target_if_idx=1, reward=1)
+
+    # transitions - interface2
+    t11 = Transition('a', 'e1', 'e2', target_if_idx=0, reward=1)
+    t12 = Transition('b', 'e2', 'e3', target_if_idx=0, reward=1)
+    t13 = Transition('c', 'e3', 'e4', target_if_idx=0, reward=1)
+    t14 = Transition('l', 'e4', 'e5', target_if_idx=-1, reward=0.01, global_action=False)
+    t15 = Transition('f', 'e5', 'e4', target_if_idx=0, reward=1)
+
+    # transitions - interface3
+    t16 = Transition('l2', 'g1', 'g2', target_if_idx=-1, reward=0.01, global_action=False)
+    t17 = Transition('l1', 'g1', 'g3', target_if_idx=-1, reward=0.01, global_action=False)
+    t18 = Transition('d', 'g1', 'g4', target_if_idx=0, reward=1)
+    t19 = Transition('e', 'g2', 'g1', target_if_idx=0, reward=1)
+    t20 = Transition('l', 'g3', 'g3', target_if_idx=-1, reward=0.01, global_action=False)
+    t21 = Transition('e', 'g4', 'g5', target_if_idx=0, reward=1)
+    t22 = Transition('f', 'g5', 'g6', target_if_idx=0, reward=1)
+    t23 = Transition('l', 'g6', 'g5', target_if_idx=-1, reward=0.01, global_action=False)
+
+    # processes
+    if1 = Process('if1', states=['s1', 's2', 's3'], transitions=[t0, t1, t2, t3, t4, t5,
+                                                                 t6, t7, t8, t9, t10], initial_state='s1')
+    if2 = Process('if2', states=['e1', 'e2', 'e3', 'e4', 'e5'], transitions=[t11, t12, t13, t14, t15],
+                  initial_state='e1')
+    if3 = Process('if3', states=['g1', 'g2', 'g3', 'g4', 'g5', 'g6'],
+                  transitions=[t16, t17, t18, t19, t20, t21, t22, t23], initial_state='g1')
+
+    # distributed system
+    dist_sys = TripleInterface('triple_coordination2', if1=if1, if2=if2, if3=if3, history_len=history_len)
+
+    return dist_sys

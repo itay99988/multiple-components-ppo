@@ -42,6 +42,8 @@ def experiment_selector(experiment, history_len):
 	# 	return hold_back_experiment_setup(history_len)
 	if experiment == 'triple_coordination':
 		return triple_coordination_experiment_setup(history_len)
+	if experiment == 'triple_coordination2':
+		return triple_coordination2_experiment_setup(history_len)
 	elif experiment == 'triple_symmetry':
 		return triple_symmetry_experiment_setup(history_len)
 	elif experiment == 'client_server':
