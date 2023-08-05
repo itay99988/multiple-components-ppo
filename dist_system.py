@@ -22,14 +22,14 @@ class DistSystem(object):
 
 
 # This class inherits the properties of DistSystem. It is a specific case in which there are only three processes.
-class TripleInterface(DistSystem):
-    def __init__(self, name, if1: Process, if2: Process, if3: Process, history_len=1):
-        super().__init__(name, [if1, if2, if3])
-        self.ifs = [if1, if2, if3]
-        self.history_len = history_len
-        self.if_state_history = [None, None, None]
-        self.if_execution = [[], [], []]
+class MultipleInterfaces(DistSystem):
+    def __init__(self, name, ifs, history_len=1):
+        super().__init__(name, ifs)
+        self.ifs = ifs
         self.if_count = len(self.ifs)
+        self.history_len = history_len
+        self.if_state_history = [None] * self.if_count
+        self.if_execution = [[] for _ in range(self.if_count)]
 
     def get_if(self, if_idx):
         return self.ifs[if_idx]

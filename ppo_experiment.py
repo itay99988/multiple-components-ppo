@@ -38,16 +38,18 @@ def experiment_selector(experiment, history_len):
 	# 	return abcd_coordination_experiment_setup(history_len)
 	# elif experiment == 'social_dilemma':
 	# 	return social_dilemma_experiment_setup(history_len)
-	# elif experiment == 'hold_back':
-	# 	return hold_back_experiment_setup(history_len)
-	if experiment == 'triple_coordination':
+	if experiment == 'hold_back':
+		return hold_back_experiment_setup(history_len)
+	elif experiment == 'triple_coordination':
 		return triple_coordination_experiment_setup(history_len)
-	if experiment == 'triple_coordination2':
+	elif experiment == 'triple_coordination2':
 		return triple_coordination2_experiment_setup(history_len)
 	elif experiment == 'triple_symmetry':
 		return triple_symmetry_experiment_setup(history_len)
 	elif experiment == 'client_server':
 		return client_server_experiment_setup(history_len)
+	elif experiment == 'client_server_extended':
+		return client_server_extended_experiment_setup(history_len)
 	else:
 		return None
 
@@ -66,12 +68,12 @@ def train(dist_sys, hyperparameters, actor_models, critic_models):
 	print(f"Training", flush=True)
 
 	# Create a model for PPO.
-	model = PPO(policy_class=SingleHeadRNN, triple_if=dist_sys, **hyperparameters)
+	model = PPO(policy_class=SingleHeadRNN, mult_if=dist_sys, **hyperparameters)
 
 	# Tries to load in an existing actor/critic model to continue training on
 	if actor_models != '' and critic_models != '':
 		print(f"Loading in {actor_models} and {critic_models}...", flush=True)
-		for i in range(3):
+		for i in range(dist_sys.if_count):
 			model.actor[i].load_state_dict(torch.load("{}{}".format(actor_models, i)))
 			model.critic[i].load_state_dict(torch.load("{}{}".format(critic_models, i)))
 			print(f"Successfully loaded.", flush=True)
@@ -104,29 +106,28 @@ def test(dist_sys, actor_models, history_len):
 		print(f"Didn't specify model file. Exiting.", flush=True)
 		sys.exit(0)
 
-	# Extract out dimensions of observation and action spaces
-	tr_dim1 = len(dist_sys.ifs[0].transitions)
-	input_dim1 = len(dist_sys.ifs[0].states) * tr_dim1 * history_len
-	tr_dim2 = len(dist_sys.ifs[1].transitions)
-	input_dim2 = len(dist_sys.ifs[1].states) * tr_dim2 * history_len
-	tr_dim3 = len(dist_sys.ifs[2].transitions)
-	input_dim3 = len(dist_sys.ifs[2].states) * tr_dim3 * history_len
+	tr_dim_lst = []
+	input_dim_lst = []
+	policy_lst = []
 
-	# Build our policy for both interfaces the same way we build our actor model in PPO
-	if1_policy = SingleHeadRNN(input_dim1, tr_dim1)
-	if2_policy = SingleHeadRNN(input_dim2, tr_dim2)
-	if3_policy = SingleHeadRNN(input_dim3, tr_dim3)
+	for if_idx in range(dist_sys.if_count):
+		# Extract out dimensions of observation and action spaces
+		tr_dim = len(dist_sys.ifs[if_idx].transitions)
+		input_dim = len(dist_sys.ifs[if_idx].states) * tr_dim * history_len
+		tr_dim_lst.append(tr_dim)
+		input_dim_lst.append(input_dim)
 
-	# Load in the actor models saved by the PPO algorithm
-	if1_policy.load_state_dict(torch.load("{}1.pth".format(actor_models)))
-	if2_policy.load_state_dict(torch.load("{}2.pth".format(actor_models)))
-	if3_policy.load_state_dict(torch.load("{}3.pth".format(actor_models)))
+		# Build our policy for each interface the same way we build our actor model in PPO
+		if_policy = SingleHeadRNN(input_dim, tr_dim)
+		# Load in the actor models saved by the PPO algorithm
+		if_policy.load_state_dict(torch.load(f"{actor_models}{if_idx}.pth"))
+		policy_lst.append(if_policy)
 
 	# Evaluate our policy with a separate module, eval_policy, to demonstrate
 	# that once we are done training the model/policy with ppo.py, we no longer need
 	# ppo.py since it only contains the training algorithm. The model/policy itself exists
 	# independently as a binary file that can be loaded in with torch.
-	eval_policy(policy1=if1_policy, policy2=if2_policy, policy3=if3_policy, triple_if=dist_sys)
+	eval_policy(policy_lst=policy_lst, mult_if=dist_sys)
 
 
 def main(args):
