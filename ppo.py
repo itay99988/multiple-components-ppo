@@ -209,7 +209,11 @@ class PPO:
 
         t = 0  # Keeps track of how many timesteps we've run so far this batch
 
-        if_suspend = [self.mult_if.get_if(i).get_suspend_lst() for i in range(self.if_count)]
+        if_suspend = [self.mult_if.get_if(i).get_suspend_lst(self.max_timesteps_per_episode)
+                      for i in range(self.if_count)]
+
+        # episode lengths, excluding suspended timesteps
+        real_ep_lens = [self.max_timesteps_per_episode - len(if_suspend[i]) for i in range(self.if_count)]
 
         # Keep simulating until we've run more than or equal to specified timesteps per batch
         while t < self.timesteps_per_batch:
@@ -228,6 +232,8 @@ class PPO:
 
             triggered_tr = [True] * self.if_count
             actions_count = [0] * self.if_count
+            local_counter = [0] * self.if_count
+            success_counter = [0] * self.if_count
             timestep_count = 0
 
             t += self.max_timesteps_per_episode
@@ -260,6 +266,11 @@ class PPO:
                             reward[j] = reward[i]
                             checked_interface[i] = checked_interface[j] = True
 
+                # before handling the other actions, count successes for each interface.
+                for i in range(self.if_count):
+                    if reward[i] > 0:
+                        success_counter[i] += 1
+
                 # handle the other actions (missed communication or local actions)
                 for i in range(self.if_count):
                     if not checked_interface[i]:
@@ -267,16 +278,30 @@ class PPO:
                             next_state[i], reward[i] = self.mult_if.missed_global_step(action[i], i)
                         else:
                             next_state[i], reward[i] = self.mult_if.local_step(action[i], i)
+                            local_counter[i] += 1
                         checked_interface[i] = True
+
+                # additional reward in the end of the episode
+                # if max(actions_count) == self.max_timesteps_per_episode:
+                #     local_actions_ratio = [local_counter[i] / real_ep_lens[i] for i in range(self.if_count)]
+                #     success_bonus = 5 * min(success_counter)
+                #     local_penalty = 5 if max(local_actions_ratio) > 0.75 else 0
+                #     for i in range(self.if_count):
+                #         reward[i] += (-1 * local_penalty)
+                #         reward[i] += success_bonus
 
                 # Track recent observation, reward, action, and action log probability (if there was a progress)
                 for i in range(self.if_count):
-                    if triggered_tr[i]:
+                    # we want to save the reward of last timestep anyway.
+                    if triggered_tr[i] or max(actions_count) == self.max_timesteps_per_episode:
                         batch_obs[i].append(state[i])
                         ep_rews[i].append(reward[i])
                         batch_acts[i].append(action[i])
                         batch_log_probs[i].append(log_prob[i])
                         state[i] = next_state[i]
+                    # in this edge case, increase the actions counter by 1.
+                    if not triggered_tr[i] and max(actions_count) == self.max_timesteps_per_episode:
+                        actions_count[i] += 1
 
                 # reset rewards and actions
                 reward = [0] * self.if_count

@@ -796,6 +796,22 @@ def triple_coordination2_experiment_setup(history_len=2):
     return dist_sys
 
 
+def third_suspend(ep_len):
+    return [i for i in range(ep_len) if i % 3 == 0]
+
+
+def half_suspend(ep_len):
+    return [i for i in range(ep_len) if i % 2 == 0]
+
+
+def suspend_alternate1(ep_len):
+    return [i for i in range(ep_len) if (i//4) % 2 == 0]
+
+
+def suspend_alternate2(ep_len):
+    return [i for i in range(ep_len) if (i//4) % 2 == 1]
+
+
 # extended client server scenario with an RNN controllers
 def client_server_extended_experiment_setup(history_len=2):
     # transitions - server (0)
@@ -876,7 +892,7 @@ def client_server_extended_experiment_setup(history_len=2):
 
     if1 = Process('Server2', states=['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
                              transitions=[t17, t18, t19, t20, t21, t22, t23, t24,
-                                          t25, t26, t27, t28, t29, t30, t31, t32], initial_state='h1')
+                                          t25, t26, t27, t28, t29, t30, t31, t32], initial_state='h1', suspend_func=third_suspend)
 
     if2 = Process('Client1', states=['e1', 'e2', 'e3', 'e4'],
                              transitions=[t33, t34, t35, t36, t37, t38, t39, t40, t41], initial_state='e1')
@@ -889,5 +905,110 @@ def client_server_extended_experiment_setup(history_len=2):
 
     # distributed system
     dist_sys = MultipleInterfaces('client_server_extended', ifs=[if0, if1, if2, if3, if4], history_len=history_len)
+
+    return dist_sys
+
+
+# three dining philosophers scenario with an RNN controllers
+def dp3_experiment_setup(history_len=2):
+    intr_reward = 3
+    local_reward = 0.1
+
+    p1_tr_lst = [
+        Transition('a1', 'g1', 'g3', target_if_idx=5, reward=intr_reward),
+        Transition('a2', 'g1', 'g2', target_if_idx=1, reward=intr_reward),
+        Transition('a2_', 'g2', 'g1', target_if_idx=1, reward=intr_reward),
+        Transition('a1', 'g2', 'g4', target_if_idx=5, reward=intr_reward),
+        Transition('a1_', 'g3', 'g1', target_if_idx=5, reward=intr_reward),
+        Transition('a2', 'g3', 'g4', target_if_idx=1, reward=intr_reward),
+        Transition('a1_', 'g4', 'g5', target_if_idx=5, reward=intr_reward),
+        Transition('a2_', 'g4', 'g6', target_if_idx=1, reward=intr_reward),
+        Transition('a2_', 'g5', 'g1', target_if_idx=1, reward=intr_reward),
+        Transition('a1_', 'g6', 'g1', target_if_idx=5, reward=intr_reward),
+        Transition('eat', 'g4', 'g4', target_if_idx=-1, reward=local_reward, global_action=False)
+    ]
+
+    p2_tr_lst = [
+        Transition('a1', 'g1', 'g3', target_if_idx=1, reward=intr_reward),
+        Transition('a2', 'g1', 'g2', target_if_idx=3, reward=intr_reward),
+        Transition('a2_', 'g2', 'g1', target_if_idx=3, reward=intr_reward),
+        Transition('a1', 'g2', 'g4', target_if_idx=1, reward=intr_reward),
+        Transition('a1_', 'g3', 'g1', target_if_idx=1, reward=intr_reward),
+        Transition('a2', 'g3', 'g4', target_if_idx=3, reward=intr_reward),
+        Transition('a1_', 'g4', 'g5', target_if_idx=1, reward=intr_reward),
+        Transition('a2_', 'g4', 'g6', target_if_idx=3, reward=intr_reward),
+        Transition('a2_', 'g5', 'g1', target_if_idx=3, reward=intr_reward),
+        Transition('a1_', 'g6', 'g1', target_if_idx=1, reward=intr_reward),
+        Transition('eat', 'g4', 'g4', target_if_idx=-1, reward=local_reward, global_action=False)
+    ]
+
+    p3_tr_lst = [
+        Transition('a1', 'g1', 'g3', target_if_idx=3, reward=intr_reward),
+        Transition('a2', 'g1', 'g2', target_if_idx=5, reward=intr_reward),
+        Transition('a2_', 'g2', 'g1', target_if_idx=5, reward=intr_reward),
+        Transition('a1', 'g2', 'g4', target_if_idx=3, reward=intr_reward),
+        Transition('a1_', 'g3', 'g1', target_if_idx=3, reward=intr_reward),
+        Transition('a2', 'g3', 'g4', target_if_idx=5, reward=intr_reward),
+        Transition('a1_', 'g4', 'g5', target_if_idx=3, reward=intr_reward),
+        Transition('a2_', 'g4', 'g6', target_if_idx=5, reward=intr_reward),
+        Transition('a2_', 'g5', 'g1', target_if_idx=5, reward=intr_reward),
+        Transition('a1_', 'g6', 'g1', target_if_idx=3, reward=intr_reward),
+        Transition('eat', 'g4', 'g4', target_if_idx=-1, reward=local_reward, global_action=False)
+    ]
+
+    c1_tr_lst = [
+        Transition('a1', 's1', 's2', target_if_idx=0, reward=intr_reward),
+        Transition('a1', 's1', 's2', target_if_idx=2, reward=intr_reward),
+        Transition('a2', 's1', 's3', target_if_idx=0, reward=intr_reward),
+        Transition('a2', 's1', 's3', target_if_idx=2, reward=intr_reward),
+        Transition('a1_', 's2', 's1', target_if_idx=0, reward=intr_reward),
+        Transition('a1_', 's2', 's1', target_if_idx=2, reward=intr_reward),
+        Transition('a2_', 's3', 's1', target_if_idx=0, reward=intr_reward),
+        Transition('a2_', 's3', 's1', target_if_idx=2, reward=intr_reward)
+    ]
+
+    c2_tr_lst = [
+        Transition('a1', 's1', 's2', target_if_idx=2, reward=intr_reward),
+        Transition('a1', 's1', 's2', target_if_idx=4, reward=intr_reward),
+        Transition('a2', 's1', 's3', target_if_idx=2, reward=intr_reward),
+        Transition('a2', 's1', 's3', target_if_idx=4, reward=intr_reward),
+        Transition('a1_', 's2', 's1', target_if_idx=2, reward=intr_reward),
+        Transition('a1_', 's2', 's1', target_if_idx=4, reward=intr_reward),
+        Transition('a2_', 's3', 's1', target_if_idx=2, reward=intr_reward),
+        Transition('a2_', 's3', 's1', target_if_idx=4, reward=intr_reward)
+    ]
+
+    c3_tr_lst = [
+        Transition('a1', 's1', 's2', target_if_idx=4, reward=intr_reward),
+        Transition('a1', 's1', 's2', target_if_idx=0, reward=intr_reward),
+        Transition('a2', 's1', 's3', target_if_idx=4, reward=intr_reward),
+        Transition('a2', 's1', 's3', target_if_idx=0, reward=intr_reward),
+        Transition('a1_', 's2', 's1', target_if_idx=4, reward=intr_reward),
+        Transition('a1_', 's2', 's1', target_if_idx=0, reward=intr_reward),
+        Transition('a2_', 's3', 's1', target_if_idx=4, reward=intr_reward),
+        Transition('a2_', 's3', 's1', target_if_idx=0, reward=intr_reward)
+    ]
+
+    # processes
+    p1 = Process('philosopher1', states=['g1', 'g2', 'g3', 'g4', 'g5', 'g6'],
+                             transitions=p1_tr_lst, initial_state='g1')
+
+    c1 = Process('Chopstick1', states=['s1', 's2', 's3'],
+                             transitions=c1_tr_lst, initial_state='s1')
+
+    p2 = Process('philosopher2', states=['g1', 'g2', 'g3', 'g4', 'g5', 'g6'],
+                             transitions=p2_tr_lst, initial_state='g1')
+
+    c2 = Process('Chopstick2', states=['s1', 's2', 's3'],
+                             transitions=c2_tr_lst, initial_state='s1')
+
+    p3 = Process('philosopher3', states=['g1', 'g2', 'g3', 'g4', 'g5', 'g6'],
+                             transitions=p3_tr_lst, initial_state='g1')
+
+    c3 = Process('Chopstick3', states=['s1', 's2', 's3'],
+                             transitions=c3_tr_lst, initial_state='s1')
+
+    # distributed system
+    dist_sys = MultipleInterfaces('dp3', ifs=[p1, c1, p2, c2, p3, c3], history_len=history_len)
 
     return dist_sys
