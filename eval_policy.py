@@ -24,7 +24,7 @@ def _log_summary(ep_len, ep_ret_lst, ep_num):
 
     # Print logging statements
     print(flush=True)
-    print(f"-------------------- Test #{ep_num} --------------------", flush=True)
+    print(f"-------------------- Test #{ep_num+1} --------------------", flush=True)
     print(f"Episodic Length: {ep_len}", flush=True)
     for i in range(if_count):
         print(f"Interface {i} Episodic Return: {ep_ret_str[i]}", flush=True)
@@ -44,8 +44,11 @@ def rollout(policy_lst, mult_if):
             A generator object rollout, or iterable, which will return the latest
             episodic length and return on each iteration of the generator.
     """
-    
+    max_timesteps_per_episode = 100
     if_count = len(policy_lst)
+
+    if_suspend = [mult_if.get_if(i).get_suspend_lst(max_timesteps_per_episode)
+                  for i in range(if_count)]
 
     # Rollout until user kills process
     for _ in range(10):
@@ -63,35 +66,48 @@ def rollout(policy_lst, mult_if):
         filtered_logits = [None] * if_count
         action_idx = [None] * if_count
 
-        for _ in range(20):
+        triggered_tr = [True] * if_count
+        reward = [0] * if_count
+        checked_interface = [False] * if_count
+
+        for timestep_count in range(max_timesteps_per_episode):
             t += 1
 
             # Query deterministic action from policy and run it
             state = [torch.tensor(state[i], dtype=torch.float).view(1, 1, -1) for i in range(if_count)]
 
+            # Check if an action can be triggered
+            for j in range(if_count):
+                if timestep_count in if_suspend[j]:
+                    triggered_tr[j] = False
+                    checked_interface[j] = True
+                else:
+                    triggered_tr[j] = True
+
             # select the best action
             available_actions_idx = []
             for if_idx in range(if_count):
-                available_actions_idx.append([mult_if.get_if(if_idx).get_transition_idx(tr_name, tr_target_if=i)
-                                              for tr_name, i in mult_if.get_if(if_idx).available_transitions_with_if()])
+                if triggered_tr[if_idx]:
+                    available_actions_idx.append([mult_if.get_if(if_idx).get_transition_idx(tr_name, tr_target_if=i)
+                                                  for tr_name, i in mult_if.get_if(if_idx).available_transitions_with_if()])
 
-                logits[if_idx], hidden_state[if_idx] = policy_lst[if_idx](state[if_idx], hidden_state[if_idx])
-                logits[if_idx] = logits[if_idx].view(-1)
+                    logits[if_idx], hidden_state[if_idx] = policy_lst[if_idx](state[if_idx], hidden_state[if_idx])
+                    logits[if_idx] = logits[if_idx].view(-1)
 
-                filtered_logits[if_idx] = logits[if_idx][available_actions_idx[if_idx]]
+                    filtered_logits[if_idx] = logits[if_idx][available_actions_idx[if_idx]]
 
-                # choose action with maximal value
-                action_idx[if_idx] = torch.argmax(filtered_logits[if_idx])
+                    # choose action with maximal value
+                    action_idx[if_idx] = torch.argmax(filtered_logits[if_idx])
+                else:
+                    available_actions_idx.append([0])
+                    action_idx[if_idx] = torch.tensor(0)
 
             real_action = [available_actions_idx[i][action_idx[i].numpy()] for i in range(if_count)]
-
-            reward = [0] * if_count
-            checked_interface = [False] * if_count
 
             # check if two different interfaces tried to communicate with each other
             for i in range(if_count):
                 for j in range(i + 1, if_count):
-                    if mult_if.check_comm_attempt(i, j, real_action[i], real_action[j]):
+                    if mult_if.check_comm_attempt(i, j, real_action[i], real_action[j]) and triggered_tr[i] and triggered_tr[j]:
                         state[i], state[j], reward[i] = mult_if.step(i, j, real_action[i], real_action[j])
                         reward[j] = reward[i]
                         checked_interface[i] = checked_interface[j] = True
@@ -108,6 +124,10 @@ def rollout(policy_lst, mult_if):
             # Sum all episodic rewards as we go along
             for i in range(if_count):
                 ep_ret[i] += reward[i]
+
+            # reset rewards and actions
+            reward = [0] * if_count
+            checked_interface = [False] * if_count
 
         # Track episodic length
         ep_len = t
