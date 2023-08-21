@@ -38,14 +38,14 @@ class Transition:
 
 # A process class - can be either the system or the environment (a finite and deterministic automaton)
 class Process:
-    def __init__(self, name, states=[], transitions=[], initial_state=None, suspend_lst=[]):
+    def __init__(self, name, states=[], transitions=[], initial_state=None, suspend_func=None):
         self.name = name
         self.states = states  # list of names of the states.
         self.initial_state = initial_state
         self.current_state = initial_state
         self.transitions = transitions  # transitions that are specific to the process.
         self.exploration = True
-        self.suspend = suspend_lst
+        self.suspend_func = suspend_func
 
     def add_state(self, name):
         self.states.append(name)
@@ -157,8 +157,10 @@ class Process:
             return None
         return random.choice(local_tr_lst)
 
-    def get_suspend_lst(self):
-        return self.suspend
+    def get_suspend_lst(self, ep_len):
+        if self.suspend_func is None:
+            return []
+        return self.suspend_func(ep_len)
 
     # checks if a certain transition is currently enabled
     def is_transition_enabled(self, tr_name):
