@@ -911,8 +911,8 @@ def client_server_extended_experiment_setup(history_len=2):
 
 # three dining philosophers scenario with an RNN controllers
 def dp3_experiment_setup(history_len=2):
-    intr_reward = 3
-    local_reward = 0.1
+    intr_reward = 1
+    local_reward = 2
 
     p1_tr_lst = [
         Transition('a1', 'g1', 'g3', target_if_idx=5, reward=intr_reward),

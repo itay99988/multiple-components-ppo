@@ -234,6 +234,7 @@ class PPO:
             actions_count = [0] * self.if_count
             local_counter = [0] * self.if_count
             success_counter = [0] * self.if_count
+            post_eat_counter = [0] * self.if_count
             timestep_count = 0
 
             t += self.max_timesteps_per_episode
@@ -266,6 +267,12 @@ class PPO:
                             reward[j] = reward[i]
                             checked_interface[i] = checked_interface[j] = True
 
+                            # check if post eat action
+                            if self.mult_if.get_if(i).get_transition_by_idx(action[i]).source_state == 'g4':
+                                post_eat_counter[i] += 1
+                            if self.mult_if.get_if(j).get_transition_by_idx(action[j]).source_state == 'g4':
+                                post_eat_counter[j] += 1
+
                 # before handling the other actions, count successes for each interface.
                 for i in range(self.if_count):
                     if reward[i] > 0:
@@ -282,13 +289,15 @@ class PPO:
                         checked_interface[i] = True
 
                 # additional reward in the end of the episode
-                # if max(actions_count) == self.max_timesteps_per_episode:
-                #     local_actions_ratio = [local_counter[i] / real_ep_lens[i] for i in range(self.if_count)]
-                #     success_bonus = 5 * min(success_counter)
-                #     local_penalty = 5 if max(local_actions_ratio) > 0.75 else 0
-                #     for i in range(self.if_count):
-                #         reward[i] += (-1 * local_penalty)
-                #         reward[i] += success_bonus
+                if max(actions_count) == self.max_timesteps_per_episode:
+                    # local_actions_ratio = [local_counter[i] / real_ep_lens[i] for i in range(self.if_count)]
+
+                    # local action is eating -> every philosopher should eat
+                    # uniform_eating_bonus = 10 * min(local_counter[::2])
+                    # post eat
+                    uniform_post_eat_bonus = 10 * min(post_eat_counter[::2])
+                    for i in range(self.if_count):
+                        reward[i] += uniform_post_eat_bonus
 
                 # Track recent observation, reward, action, and action log probability (if there was a progress)
                 for i in range(self.if_count):
@@ -330,7 +339,7 @@ class PPO:
 
         for i in range(self.if_count):
             # print actions
-            print(self.get_actions_seq(batch_acts[i][0:self.max_timesteps_per_episode], i))
+            print(f"{self.get_actions_seq(batch_acts[i][0:self.max_timesteps_per_episode], i)} \n\n")
 
             # Reshape data as tensors in the shape specified in function description, before returning
             batch_obs[i] = torch.tensor(batch_obs[i], dtype=torch.float)
