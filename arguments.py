@@ -28,7 +28,7 @@ def get_args():
     parser.add_argument('--iteration_updates', dest='iteration_updates', type=int, default='10')  # iteration updates foreach batch
     parser.add_argument('--lr', dest='lr', type=float, default='1e-2')  # learning rate
     parser.add_argument('--clip', dest='clip', type=float, default='0.2')  # clipping epsilon
-    parser.add_argument('--total_timesteps', dest='total_timesteps', type=int, default='900000')  # total timesteps
+    parser.add_argument('--total_timesteps', dest='total_timesteps', type=int, default='1500000')  # total timesteps
     parser.add_argument('--init_tem', dest='initial_temperature', type=float, default='2.5')  # initial temperature
     parser.add_argument('--tem_decay', dest='temperature_decay', type=float, default='1.01')  #temperature decay factor
     parser.add_argument('--end_cond', dest='end_cond_threshold', type=float, default='4')  # end condition percentage

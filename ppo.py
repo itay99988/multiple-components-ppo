@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions.categorical import Categorical
+from analyze_dp_results import analyze_joint_policy
 
 
 class PPO:
@@ -268,9 +269,9 @@ class PPO:
                             checked_interface[i] = checked_interface[j] = True
 
                             # check if post eat action
-                            if self.mult_if.get_if(i).get_transition_by_idx(action[i]).source_state == 'g4':
+                            if self.mult_if.get_if(i).get_transition_by_idx(action[i]).source_state == 'g7':
                                 post_eat_counter[i] += 1
-                            if self.mult_if.get_if(j).get_transition_by_idx(action[j]).source_state == 'g4':
+                            if self.mult_if.get_if(j).get_transition_by_idx(action[j]).source_state == 'g7':
                                 post_eat_counter[j] += 1
 
                 # before handling the other actions, count successes for each interface.
@@ -337,7 +338,10 @@ class PPO:
             for i in range(self.if_count):
                 batch_rews[i].append(ep_rews[i])
 
+        # this is just for analyzing and printing the different policies (can be applied for every analysis)
+        policies = []
         for i in range(self.if_count):
+            policies.append(self.get_actions_seq(batch_acts[i][0:self.max_timesteps_per_episode], i))
             # print actions
             print(f"{self.get_actions_seq(batch_acts[i][0:self.max_timesteps_per_episode], i)} \n\n")
 
@@ -349,6 +353,9 @@ class PPO:
 
             # Log the episodic returns and episodic lengths in this batch.
             self.logger['batch_rews'][i] = batch_rews[i]
+
+        # print the analysis of the joint policy (who ate and when)
+        analyze_joint_policy(policies, "eat1")
 
         self.logger['batch_lens'] = batch_lens[0]
 
