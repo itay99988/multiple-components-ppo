@@ -52,6 +52,8 @@ def experiment_selector(experiment, history_len):
 		return client_server_extended_experiment_setup(history_len)
 	elif experiment == 'dp3':
 		return dp3_experiment_setup(history_len=history_len)
+	elif experiment == 'smokers':
+		return smokers_experiment_setup(history_len=history_len)
 	else:
 		return None
 

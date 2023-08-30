@@ -910,7 +910,7 @@ def client_server_extended_experiment_setup(history_len=2):
 
 
 # three dining philosophers scenario with an RNN controllers
-def dp3_experiment_setup(history_len=2, p_num=3):
+def dp3_experiment_setup(history_len=2, p_num=7):
     intr_reward = 1
     eat_reward = 1
     eat_again_reward = 0
@@ -964,5 +964,107 @@ def dp3_experiment_setup(history_len=2, p_num=3):
 
     # distributed system
     dist_sys = MultipleInterfaces('dp3', ifs=if_lst, history_len=history_len)
+
+    return dist_sys
+
+
+# the cigarette smokers scenario with an RNN controllers
+def smokers_experiment_setup(history_len=2):
+    intr_reward = 1
+    smoke_reward = 1
+
+    t_semaphore_tr_lst = [
+        Transition('put_tobacco', 'e1', 'e2', target_if_idx=6, reward=intr_reward),
+        Transition('sync', 'e2', 'e3', target_if_idx=1, reward=intr_reward),
+        Transition('sync', 'e2', 'e3', target_if_idx=2, reward=intr_reward),
+        Transition('consume_tobacco', 'e3', 'e1', target_if_idx=3, reward=intr_reward),
+        Transition('consume_tobacco', 'e3', 'e1', target_if_idx=4, reward=intr_reward),
+        Transition('consume_tobacco', 'e3', 'e1', target_if_idx=5, reward=intr_reward)
+    ]
+
+    p_semaphore_tr_lst = [
+        Transition('put_paper', 'e1', 'e2', target_if_idx=6, reward=intr_reward),
+        Transition('sync', 'e2', 'e3', target_if_idx=0, reward=intr_reward),
+        Transition('sync', 'e2', 'e3', target_if_idx=2, reward=intr_reward),
+        Transition('consume_paper', 'e3', 'e1', target_if_idx=3, reward=intr_reward),
+        Transition('consume_paper', 'e3', 'e1', target_if_idx=4, reward=intr_reward),
+        Transition('consume_paper', 'e3', 'e1', target_if_idx=5, reward=intr_reward)
+    ]
+
+    m_semaphore_tr_lst = [
+        Transition('put_matches', 'e1', 'e2', target_if_idx=6, reward=intr_reward),
+        Transition('sync', 'e2', 'e3', target_if_idx=0, reward=intr_reward),
+        Transition('sync', 'e2', 'e3', target_if_idx=1, reward=intr_reward),
+        Transition('consume_matches', 'e3', 'e1', target_if_idx=3, reward=intr_reward),
+        Transition('consume_matches', 'e3', 'e1', target_if_idx=4, reward=intr_reward),
+        Transition('consume_matches', 'e3', 'e1', target_if_idx=5, reward=intr_reward)
+    ]
+
+    t_smoker_tr_lst = [
+        Transition('consume_paper', 's1', 's2', target_if_idx=1, reward=intr_reward),
+        Transition('consume_matches', 's1', 's3', target_if_idx=2, reward=intr_reward),
+        Transition('consume_matches', 's2', 's4', target_if_idx=2, reward=intr_reward),
+        Transition('consume_paper', 's3', 's4', target_if_idx=1, reward=intr_reward),
+        Transition('smoke', 's4', 's5', target_if_idx=-1, reward=smoke_reward, global_action=False),
+        Transition('done_smoking', 's5', 's1', target_if_idx=6, reward=intr_reward)
+    ]
+
+    p_smoker_tr_lst = [
+        Transition('consume_tobacco', 's1', 's2', target_if_idx=0, reward=intr_reward),
+        Transition('consume_matches', 's1', 's3', target_if_idx=2, reward=intr_reward),
+        Transition('consume_matches', 's2', 's4', target_if_idx=2, reward=intr_reward),
+        Transition('consume_tobacco', 's3', 's4', target_if_idx=0, reward=intr_reward),
+        Transition('smoke', 's4', 's5', target_if_idx=-1, reward=smoke_reward, global_action=False),
+        Transition('done_smoking', 's5', 's1', target_if_idx=6, reward=intr_reward)
+    ]
+
+    m_smoker_tr_lst = [
+        Transition('consume_paper', 's1', 's2', target_if_idx=1, reward=intr_reward),
+        Transition('consume_tobacco', 's1', 's3', target_if_idx=0, reward=intr_reward),
+        Transition('consume_tobacco', 's2', 's4', target_if_idx=0, reward=intr_reward),
+        Transition('consume_paper', 's3', 's4', target_if_idx=1, reward=intr_reward),
+        Transition('smoke', 's4', 's5', target_if_idx=-1, reward=smoke_reward, global_action=False),
+        Transition('done_smoking', 's5', 's1', target_if_idx=6, reward=intr_reward)
+    ]
+
+    provider_tr_lst = [
+        Transition('tobacco_paper', 'g1', 'g2', target_if_idx=-1, reward=intr_reward, global_action=False),
+        Transition('tobacco_matches', 'g1', 'g3', target_if_idx=-1, reward=intr_reward, global_action=False),
+        Transition('paper_tobacco', 'g1', 'g4', target_if_idx=-1, reward=intr_reward, global_action=False),
+        Transition('paper_matches', 'g1', 'g5', target_if_idx=-1, reward=intr_reward, global_action=False),
+        Transition('matches_paper', 'g1', 'g6', target_if_idx=-1, reward=intr_reward, global_action=False),
+        Transition('matches_tobacco', 'g1', 'g7', target_if_idx=-1, reward=intr_reward, global_action=False),
+        Transition('put_tobacco', 'g2', 'g8', target_if_idx=0, reward=intr_reward),
+        Transition('put_tobacco', 'g3', 'g9', target_if_idx=0, reward=intr_reward),
+        Transition('put_paper', 'g4', 'g10', target_if_idx=1, reward=intr_reward),
+        Transition('put_paper', 'g5', 'g9', target_if_idx=1, reward=intr_reward),
+        Transition('put_matches', 'g6', 'g8', target_if_idx=2, reward=intr_reward),
+        Transition('put_matches', 'g7', 'g10', target_if_idx=2, reward=intr_reward),
+        Transition('put_paper', 'g8', 'g11', target_if_idx=1, reward=intr_reward),
+        Transition('put_matches', 'g9', 'g11', target_if_idx=2, reward=intr_reward),
+        Transition('put_tobacco', 'g10', 'g11', target_if_idx=0, reward=intr_reward),
+        Transition('done_smoking', 'g11', 'g1', target_if_idx=3, reward=intr_reward),
+        Transition('done_smoking', 'g11', 'g1', target_if_idx=4, reward=intr_reward),
+        Transition('done_smoking', 'g11', 'g1', target_if_idx=5, reward=intr_reward)
+    ]
+
+    # the components list
+    provider_comp = Process(f'provider', states=['g1', 'g2', 'g3', 'g4', 'g5', 'g6',
+                                                 'g7', 'g8', 'g9', 'g10', 'g11'], transitions=provider_tr_lst,
+                            initial_state='g1')
+    provider_comp.select_random = True
+
+    if_lst = [
+        Process(f't_semaphore', states=['e1', 'e2', 'e3'], transitions=t_semaphore_tr_lst, initial_state='e1'),
+        Process(f'p_semaphore', states=['e1', 'e2', 'e3'], transitions=p_semaphore_tr_lst, initial_state='e1'),
+        Process(f'm_semaphore', states=['e1', 'e2', 'e3'], transitions=m_semaphore_tr_lst, initial_state='e1'),
+        Process(f't_smoker', states=['s1', 's2', 's3', 's4', 's5'], transitions=t_smoker_tr_lst, initial_state='s1'),
+        Process(f'p_smoker', states=['s1', 's2', 's3', 's4', 's5'], transitions=p_smoker_tr_lst, initial_state='s1'),
+        Process(f'm_smoker', states=['s1', 's2', 's3', 's4', 's5'], transitions=m_smoker_tr_lst, initial_state='s1'),
+        provider_comp
+    ]
+
+    # distributed system
+    dist_sys = MultipleInterfaces('smokers', ifs=if_lst, history_len=history_len)
 
     return dist_sys

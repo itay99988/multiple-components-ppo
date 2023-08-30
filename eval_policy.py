@@ -2,6 +2,7 @@
 	This file is used only to evaluate our trained policy/actor after
 	training in main.py with ppo.py.
 """
+import random
 import torch
 
 
@@ -98,6 +99,10 @@ def rollout(policy_lst, mult_if):
 
                     # choose action with maximal value
                     action_idx[if_idx] = torch.argmax(filtered_logits[if_idx])
+
+                    # if we have to select at random
+                    if mult_if.get_if(if_idx).select_random:
+                        action_idx[if_idx] = torch.tensor(random.randrange(len(available_actions_idx[if_idx])))
                 else:
                     available_actions_idx.append([0])
                     action_idx[if_idx] = torch.tensor(0)

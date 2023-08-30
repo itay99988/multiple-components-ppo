@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import random
 import torch
 import torch.nn as nn
 from torch.optim import Adam
@@ -290,15 +291,12 @@ class PPO:
                         checked_interface[i] = True
 
                 # additional reward in the end of the episode
-                if max(actions_count) == self.max_timesteps_per_episode:
-                    # local_actions_ratio = [local_counter[i] / real_ep_lens[i] for i in range(self.if_count)]
-
-                    # local action is eating -> every philosopher should eat
-                    # uniform_eating_bonus = 10 * min(local_counter[::2])
-                    # post eat
-                    uniform_post_eat_bonus = 10 * min(post_eat_counter[::2])
-                    for i in range(self.if_count):
-                        reward[i] += uniform_post_eat_bonus
+                # if max(actions_count) == self.max_timesteps_per_episode:
+                #     # local_actions_ratio = [local_counter[i] / real_ep_lens[i] for i in range(self.if_count)]
+                #
+                #     uniform_post_eat_bonus = 10 * min(post_eat_counter[::2])
+                #     for i in range(self.if_count):
+                #         reward[i] += uniform_post_eat_bonus
 
                 # Track recent observation, reward, action, and action log probability (if there was a progress)
                 for i in range(self.if_count):
@@ -417,6 +415,9 @@ class PPO:
         else:
             # Select the action with the highest probability
             action = torch.argmax(filtered_logits)
+
+        if self.mult_if.get_if(if_idx).select_random and self.mult_if.get_if(if_idx).current_state != 'g11':
+            action = torch.tensor(random.randrange(len(available_actions_idx)))
 
         # Calculate the log probability for that action
         log_prob = dist.log_prob(action)

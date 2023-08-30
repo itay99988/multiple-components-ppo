@@ -20,7 +20,7 @@ def get_args():
     parser.add_argument('--mode', dest='mode', type=str, default='train')  # can be 'train' or 'test'
     parser.add_argument('--actor_model', dest='actor_model', type=str, default='')  # your actor model filename
     parser.add_argument('--critic_model', dest='critic_model', type=str, default='')  # your critic model filename
-    parser.add_argument('--experiment', dest='experiment', type=str, default='dp3')  # experiment name
+    parser.add_argument('--experiment', dest='experiment', type=str, default='smokers')  # experiment name
     parser.add_argument('--history', dest='history_len', type=int, default='1')  # history length
     parser.add_argument('--batch_timesteps', dest='batch_timesteps', type=int, default='6000')  # allowed timesteps for each batch
     parser.add_argument('--episode_timesteps', dest='episode_timesteps', type=int, default='40')  # timesteps foreach episode

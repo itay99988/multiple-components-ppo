@@ -45,6 +45,7 @@ class Process:
         self.current_state = initial_state
         self.transitions = transitions  # transitions that are specific to the process.
         self.exploration = True
+        self.select_random = False
         self.suspend_func = suspend_func
 
     def add_state(self, name):
